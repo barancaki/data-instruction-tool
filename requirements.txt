@@ -1,0 +1,10 @@
+streamlit
+pandas
+selenium
+time
+plotly
+langchain
+ollama
+numpy
+Levenshtein
+tempfile
