@@ -75,7 +75,11 @@ def scrape_replast_all_pages(url):
                 "Ülke":ulke,
                 "Telefon": telefon,
                 "Web adresi": site,
-                "Ürün Grupları": urun_gruplari
+                "Ürün Grupları": urun_gruplari,
+                "Company Mail":"",
+                "Company Zip-Code":"",
+                "Company City":"",
+                "Company Bussines Type":""                
             })
 
         page_num += 1
@@ -99,7 +103,7 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
     driver_path = "/Users/barancaki/Documents/chromedriver-mac-arm64/chromedriver"
 
     options = Options()
-    options.add_argument("--headless")  # Test ederken kapalı bırak
+    options.add_argument("--headless")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
 
