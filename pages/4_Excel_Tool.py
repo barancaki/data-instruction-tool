@@ -65,9 +65,9 @@ class DataMatcher:
 
 
 # Streamlit Arayüzü
-st.title("📁 Çoklu Excel Dosyası Karşılaştırıcı")
+st.header("📁 Çoklu Excel Dosyası Karşılaştırıcı")
 
-uploaded_files = st.file_uploader("Birden fazla Excel dosyası yükleyin", type=["xlsx"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Birden fazla Excel dosyasını buraya yükleyin", type=["xlsx"], accept_multiple_files=True)
 
 if uploaded_files and len(uploaded_files) >= 2:
     st.subheader("📄 Dosya Önizlemeleri")
