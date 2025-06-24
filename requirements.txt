@@ -1,10 +1,9 @@
-streamlit
-pandas
 selenium
-time
+pandas
+streamlit
 plotly
+platformdirs
+beautifulsoup4
 langchain
-ollama
-numpy
-Levenshtein
-tempfile
+langchain_ollama
+python-Levenshtein
