@@ -8,9 +8,22 @@ import pandas as pd
 import streamlit as st
 import time
 import plotly.express as px
+import platform
 
+# İşletim sistemi adı alınır
+os_name = platform.system()
 
-driver_path = "chromedriver-mac-arm64/chromedriver"
+# Kontrol yapılır
+if os_name == "Darwin":
+    driver_path = "chromedriver-mac-arm64/chromedriver"
+elif os_name == "Windows":
+    driver_path = "chromedriver-win64/chromedriver.exe"
+else:
+    if st:
+        st.warning(f"Bu işletim sistemi tanımlı değil: {os_name}")
+    else:
+        print(f"Bu işletim sistemi tanımlı değil: {os_name}")
+
 
 def scrape_replast_all_pages(url):
     options = Options()
