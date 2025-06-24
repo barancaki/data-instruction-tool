@@ -1,4 +1,4 @@
-from scrape import scrape_replast_all_pages,scrape_win_eurasia_all_pages,scrape_packaging_fair
+from scrape import scrape_replast_all_pages,scrape_win_eurasia_all_pages,scrape_packaging_fair,scrape_burtarim_fair
 import streamlit as st
 
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
@@ -37,5 +37,11 @@ if url in ["https://packagingfair.com/katilimci-listesi"]:
             with st.spinner("Sayfalar taranıyor..."):
                 scrape_packaging_fair(int(sayfa_sayisi))
             st.success("Tarama tamamlandı!")
+
+if url in ["https://www.burtarim.com/katilimci-listesi", "https://www.burtarim.com/katilimci-listesi?page=1"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_burtarim_fair(url)
+        st.success("Tarama tamamlandı!")
 
 st.text('© Baran Çakı 2025')
