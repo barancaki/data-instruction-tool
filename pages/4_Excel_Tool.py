@@ -22,6 +22,10 @@ class DataMatcher:
     def _match_two_files(self, df1, df2, cols, file1_name, file2_name):
         df1 = df1.copy()
         df2 = df2.copy()
+        
+        # Orijinal dataframe'leri sakla (Exhibition Name için)
+        original_df1 = df1.copy()
+        original_df2 = df2.copy()
 
         combo_col = "_combo_col"
         df1 = self._combine_columns(df1, cols, combo_col)
@@ -30,13 +34,37 @@ class DataMatcher:
         df1 = df1[df1[combo_col] != ""]
         df2 = df2[df2[combo_col] != ""]
 
+        results = []
+
         # Exact Match
         merged = pd.merge(df1, df2, on=combo_col, suffixes=(f'_{file1_name}', f'_{file2_name}'), how="inner")
-        merged["Match_Type"] = "Exact Match"
-        merged["Source"] = f"{file1_name} vs {file2_name}"
+        
+        for _, row in merged.iterrows():
+            result_row = {}
+            
+            # Exhibition Name kolonunu kontrol et ve ekle (varsa)
+            if "Exhibition Name" in original_df1.columns:
+                # Orijinal index'i kullanarak Exhibition Name'i al
+                df1_idx = df1[df1[combo_col] == row[combo_col]].index[0]
+                result_row[f"Exhibition Name_{file1_name}"] = original_df1.loc[df1_idx, "Exhibition Name"]
+            if "Exhibition Name" in original_df2.columns:
+                # Orijinal index'i kullanarak Exhibition Name'i al  
+                df2_idx = df2[df2[combo_col] == row[combo_col]].index[0]
+                result_row[f"Exhibition Name_{file2_name}"] = original_df2.loc[df2_idx, "Exhibition Name"]
+            
+            # Seçilen sütunları ekle (her iki dosya için)
+            for col in cols:
+                result_row[f"{col}_{file1_name}"] = row.get(f"{col}_{file1_name}", "")
+                result_row[f"{col}_{file2_name}"] = row.get(f"{col}_{file2_name}", "")
+            
+            # Eşleşme bilgilerini ekle
+            result_row["Match_Type"] = "Exact Match"
+            result_row["Similarity"] = 1.0
+            result_row["Source"] = f"{file1_name} vs {file2_name}"
+            
+            results.append(result_row)
 
         # Fuzzy Match
-        fuzzy_matches = []
         left_only = df1[~df1[combo_col].isin(df2[combo_col])]
         right_only = df2[~df2[combo_col].isin(df1[combo_col])]
 
@@ -46,22 +74,27 @@ class DataMatcher:
                 val2 = row2[combo_col]
                 sim = ratio(val1, val2)
                 if val1 and val2 and sim >= self.similarity_threshold:
-                    match_data = {
-                        f"Match_Val_{file1_name}": val1,
-                        f"Match_Val_{file2_name}": val2,
-                        "Match_Type": "Fuzzy Match",
-                        "Similarity": sim,
-                        "Source": f"{file1_name} vs {file2_name}"
-                    }
-                    match_data.update({f"{k}_{file1_name}": v for k, v in row1.items() if k != combo_col})
-                    match_data.update({f"{k}_{file2_name}": v for k, v in row2.items() if k != combo_col})
-                    fuzzy_matches.append(match_data)
+                    result_row = {}
+                    
+                    # Exhibition Name kolonunu kontrol et ve ekle (varsa)
+                    if "Exhibition Name" in original_df1.columns:
+                        result_row[f"Exhibition Name_{file1_name}"] = original_df1.loc[row1.name, "Exhibition Name"]
+                    if "Exhibition Name" in original_df2.columns:
+                        result_row[f"Exhibition Name_{file2_name}"] = original_df2.loc[row2.name, "Exhibition Name"]
+                    
+                    # Seçilen sütunları ekle (her iki dosya için)
+                    for col in cols:
+                        result_row[f"{col}_{file1_name}"] = row1.get(col, "")
+                        result_row[f"{col}_{file2_name}"] = row2.get(col, "")
+                    
+                    # Eşleşme bilgilerini ekle
+                    result_row["Match_Type"] = "Fuzzy Match"
+                    result_row["Similarity"] = round(sim, 3)
+                    result_row["Source"] = f"{file1_name} vs {file2_name}"
+                    
+                    results.append(result_row)
 
-        if fuzzy_matches:
-            fuzzy_df = pd.DataFrame(fuzzy_matches)
-            merged = pd.concat([merged, fuzzy_df], ignore_index=True)
-
-        return merged
+        return pd.DataFrame(results) if results else pd.DataFrame()
 
 
 # Streamlit Arayüzü
@@ -101,6 +134,30 @@ if uploaded_files and len(uploaded_files) >= 2:
 
                     if results:
                         final_df = pd.concat(results, ignore_index=True)
+                        
+                        # Sütun sıralaması: Exhibition Name + Seçilen sütunlar + eşleşme bilgileri
+                        ordered_columns = []
+                        
+                        # Önce Exhibition Name kolonunu ekle (varsa)
+                        for file_name in [f.replace(".xlsx", "") for f in dataframes.keys()]:
+                            exhibition_col = f"Exhibition Name_{file_name}"
+                            if exhibition_col in final_df.columns:
+                                ordered_columns.append(exhibition_col)
+                        
+                        # Sonra seçilen sütunları ekle
+                        for col in selected_columns:
+                            # Her dosya için seçilen sütunu ekle
+                            for file_name in [f.replace(".xlsx", "") for f in dataframes.keys()]:
+                                col_name = f"{col}_{file_name}"
+                                if col_name in final_df.columns:
+                                    ordered_columns.append(col_name)
+                        
+                        # Eşleşme bilgilerini ekle
+                        ordered_columns.extend(["Match_Type", "Similarity", "Source"])
+                        
+                        # Sadece istenen sütunları seç ve sırala
+                        final_df = final_df[ordered_columns]
+                        
                         st.success(f"Eşleşmeler tamamlandı! Toplam: {len(final_df)} kayıt")
                         st.dataframe(final_df.head(50))
 

@@ -10,7 +10,7 @@ import time
 import plotly.express as px
 
 def scrape_replast_all_pages(url):
-    driver_path = "/Users/barancaki/Documents/chromedriver-mac-arm64/chromedriver"
+    driver_path = "chromedriver-mac-arm64/chromedriver"
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--disable-gpu")
@@ -100,7 +100,7 @@ def scrape_replast_all_pages(url):
 
 
 def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
-    driver_path = "/Users/barancaki/Documents/chromedriver-mac-arm64/chromedriver"
+    driver_path = "chromedriver-mac-arm64/chromedriver"
 
     options = Options()
     options.add_argument("--headless")
@@ -194,7 +194,7 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
         st.dataframe(df)
 
 def scrape_packaging_fair(sayfa_sayisi):
-    driver_path = "/Users/barancaki/Documents/chromedriver-mac-arm64/chromedriver"
+    driver_path = "chromedriver-mac-arm64/chromedriver"
 
     options = Options()
     options.add_argument("--headless")
