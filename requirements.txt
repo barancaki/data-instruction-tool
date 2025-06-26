@@ -7,3 +7,4 @@ beautifulsoup4
 langchain
 langchain_ollama
 python-Levenshtein
+scikit-learn
