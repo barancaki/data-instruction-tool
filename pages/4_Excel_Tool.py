@@ -52,6 +52,10 @@ class OptimizedDataMatcher:
         except:
             return ratio(val1, val2)
 
+    def _get_comparison_columns(self, cols: List[str]) -> List[str]:
+        """Karşılaştırmada kullanılacak kolonları döndür (Data Source hariç)"""
+        return [col for col in cols if col != "Data Source"]
+
     def _find_matches_by_columns(self, df1: pd.DataFrame, df2: pd.DataFrame, 
                                 cols: List[str], file1_name: str, file2_name: str,
                                 original_df1: pd.DataFrame, original_df2: pd.DataFrame,
@@ -59,8 +63,15 @@ class OptimizedDataMatcher:
         """Kolonları ayrı ayrı karşılaştırarak eşleşmeleri bul"""
         results = []
         
-        # Şirket standart kolonları
+        # Şirket standart kolonları (çıktıda gösterilecek)
         company_columns = ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]
+        
+        # Karşılaştırmada kullanılacak kolonlar (Data Source hariç)
+        comparison_cols = self._get_comparison_columns(cols)
+        
+        if not comparison_cols:
+            st.warning("Karşılaştırma için uygun kolon bulunamadı!")
+            return results
         
         # Her df1 satırını df2'deki tüm satırlarla karşılaştır
         total_comparisons = len(df1) * len(df2)
@@ -70,8 +81,8 @@ class OptimizedDataMatcher:
         processed = 0
         
         for idx1, row1 in df1.iterrows():
-            # Satır1'in tüm kolonları boş mu kontrol et
-            row1_has_data = any(self._clean_value(row1.get(col, "")) for col in cols)
+            # Satır1'in karşılaştırma kolonları boş mu kontrol et
+            row1_has_data = any(self._clean_value(row1.get(col, "")) for col in comparison_cols)
             if not row1_has_data:
                 processed += len(df2)
                 continue
@@ -79,8 +90,8 @@ class OptimizedDataMatcher:
             best_matches = []
             
             for idx2, row2 in df2.iterrows():
-                # Satır2'nin tüm kolonları boş mu kontrol et
-                row2_has_data = any(self._clean_value(row2.get(col, "")) for col in cols)
+                # Satır2'nin karşılaştırma kolonları boş mu kontrol et
+                row2_has_data = any(self._clean_value(row2.get(col, "")) for col in comparison_cols)
                 if not row2_has_data:
                     processed += 1
                     continue
@@ -89,8 +100,8 @@ class OptimizedDataMatcher:
                 total_similarity = 0
                 valid_columns = 0
                 
-                # Her kolon için benzerlik hesapla
-                for col in cols:
+                # Her karşılaştırma kolonu için benzerlik hesapla (Data Source hariç)
+                for col in comparison_cols:
                     val1 = self._clean_value(row1.get(col, ""))
                     val2 = self._clean_value(row2.get(col, ""))
                     
@@ -128,7 +139,7 @@ class OptimizedDataMatcher:
             for match in best_matches:
                 result_row = {}
                 
-                # Şirket standart kolonlarını ekle
+                # Şirket standart kolonlarını ekle (Data Source dahil - sadece çıktı için)
                 for col in company_columns:
                     if col in original_df1.columns:
                         result_row[f"{col}_{file1_name}"] = original_df1.loc[idx1, col]
@@ -140,7 +151,7 @@ class OptimizedDataMatcher:
                     else:
                         result_row[f"{col}_{file2_name}"] = ""
                 
-                # Eşleşme detayları
+                # Eşleşme detayları (sadece karşılaştırma kolonları)
                 match_details = []
                 for col, sim in match['column_similarities'].items():
                     if sim >= self.similarity_threshold:
@@ -172,8 +183,11 @@ class OptimizedDataMatcher:
         results = []
         company_columns = ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]
         
-        # Her kolon için ayrı exact match
-        for col in cols:
+        # Karşılaştırmada kullanılacak kolonlar (Data Source hariç)
+        comparison_cols = self._get_comparison_columns(cols)
+        
+        # Her karşılaştırma kolonu için ayrı exact match (Data Source hariç)
+        for col in comparison_cols:
             if col not in df1.columns or col not in df2.columns:
                 continue
                 
@@ -199,7 +213,7 @@ class OptimizedDataMatcher:
                         for _, row2 in df2_matches.iterrows():
                             result_row = {}
                             
-                            # Şirket standart kolonlarını ekle
+                            # Şirket standart kolonlarını ekle (Data Source dahil - sadece çıktı için)
                             for comp_col in company_columns:
                                 if comp_col in original_df1.columns:
                                     result_row[f"{comp_col}_{file1_name}"] = original_df1.loc[row1.name, comp_col]
@@ -233,8 +247,9 @@ class OptimizedDataMatcher:
             original_df1 = df1.copy()
             original_df2 = df2.copy()
             
-            # Kolonları temizle
-            for col in cols:
+            # Kolonları temizle (sadece karşılaştırma kolonları)
+            comparison_cols = self._get_comparison_columns(cols)
+            for col in comparison_cols:
                 if col in df1.columns:
                     df1[col] = df1[col].apply(self._clean_value)
                 if col in df2.columns:
@@ -248,16 +263,16 @@ class OptimizedDataMatcher:
             
             results = []
             
-            # 1. Exact Match (kolon bazlı)
-            with st.spinner("🎯 Exact matching (kolon bazlı)..."):
+            # 1. Exact Match (kolon bazlı, Data Source hariç)
+            with st.spinner("🎯 Exact matching (kolon bazlı, Data Source hariç)..."):
                 exact_results = self._exact_match_by_columns(
                     df1, df2, cols, file1_name, file2_name, original_df1, original_df2
                 )
                 results.extend(exact_results)
                 st.success(f"✅ Exact match tamamlandı: {len(exact_results)} eşleşme")
             
-            # 2. Fuzzy Match (kolon bazlı)
-            with st.spinner("🔍 Fuzzy matching (kolon bazlı)..."):
+            # 2. Fuzzy Match (kolon bazlı, Data Source hariç)
+            with st.spinner("🔍 Fuzzy matching (kolon bazlı, Data Source hariç)..."):
                 # Büyük veri seti kontrolü
                 total_comparisons = len(df1) * len(df2)
                 use_tfidf = (self.use_tfidf_for_large_data and 
@@ -323,7 +338,8 @@ def main():
         st.success("""
         **✨ Kolon Bazlı Eşleştirme:**
         - Her kolon ayrı ayrı karşılaştırılır
-        - CompanyName eşleşen ama Website farklı olan kayıtlar da bulunur
+        - **Data Source karşılaştırmada kullanılmaz**
+        - CompanyName, Website, Mail kolonları karşılaştırılır
         - Eşleşen kolonlar detaylı gösterilir
         - Partial match desteği
         """)
@@ -420,23 +436,32 @@ def main():
             with col2:
                 combinations_count = len(list(combinations(dataframes.keys(), 2)))
                 st.metric("🔄 Karşılaştırma Sayısı", combinations_count)
-                st.metric("📋 Kullanılacak Sütun", len(selected_columns))
+                # Karşılaştırmada kullanılacak kolon sayısı (Data Source hariç)
+                comparison_cols = [col for col in selected_columns if col != "Data Source"]
+                st.metric("📋 Karşılaştırma Kolonu", len(comparison_cols))
                 
             # Kullanılan sütunları göster
             st.subheader("🔍 Karşılaştırmada Kullanılacak Sütunlar")
-            st.write("**Şirket Standart Kolonlar:**")
+            st.write("**Çıktıda Gösterilecek Kolonlar:**")
             st.code("Data Source, CompanyName, CompanyWebsite, CompanyMail")
+            
+            st.write("**Karşılaştırmada Kullanılacak Kolonlar (Data Source hariç):**")
+            comparison_cols = [col for col in selected_columns if col != "Data Source"]
+            st.code(", ".join(comparison_cols))
             
             if len(selected_columns) > 4:
                 additional = [col for col in selected_columns if col not in ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]]
-                st.write("**Ek Kolonlar:**")
-                st.code(", ".join(additional))
+                if additional:
+                    st.write("**Ek Karşılaştırma Kolonları:**")
+                    st.code(", ".join(additional))
 
             # Yeni algoritma açıklaması
             st.subheader("🆕 Kolon Bazlı Eşleştirme Algoritması")
             st.info("""
             **Nasıl Çalışır:**
             - Her satır, diğer dosyadaki tüm satırlarla karşılaştırılır
+            - **Data Source kolonu karşılaştırmada kullanılmaz** (sadece çıktıda gösterilir)
+            - CompanyName, CompanyWebsite, CompanyMail kolonları karşılaştırılır
             - Her kolon ayrı ayrı benzerlik skorları alır  
             - Eşleşme koşulları:
               - En az bir kolon eşik değeri geçerse ✅
