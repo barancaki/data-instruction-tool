@@ -29,189 +29,201 @@ class OptimizedDataMatcher:
             return ""
         return str(value).strip().lower()  # Küçük harfe çevir
 
-    def _combine_columns(self, df: pd.DataFrame, columns: list, new_col: str) -> pd.DataFrame:
-        """Sütunları birleştir ve temizle"""
-        try:
-            df[new_col] = df[columns].astype(str).agg(" ".join, axis=1)
-            df[new_col] = df[new_col].apply(self._clean_value)
-            return df
-        except Exception as e:
-            logger.error(f"Sütun birleştirme hatası: {e}")
-            raise
+    def _calculate_column_similarity(self, val1: str, val2: str) -> float:
+        """İki değer arasındaki benzerliği hesapla"""
+        if not val1 or not val2:
+            return 0.0
+        return ratio(val1, val2)
 
-    def _exact_match(self, df1: pd.DataFrame, df2: pd.DataFrame, combo_col: str, 
-                    cols: List[str], file1_name: str, file2_name: str, 
-                    original_df1: pd.DataFrame, original_df2: pd.DataFrame) -> List[Dict]:
-        """Exact match işlemi"""
-        results = []
+    def _calculate_tfidf_similarity(self, val1: str, val2: str) -> float:
+        """TF-IDF ile benzerlik hesapla"""
+        if not val1 or not val2:
+            return 0.0
         
-        # Inner join ile exact match
-        merged = pd.merge(df1, df2, on=combo_col, suffixes=(f'_{file1_name}', f'_{file2_name}'), how="inner")
-        
-        for _, row in merged.iterrows():
-            result_row = {}
-            
-            # Data Source kolonunu kontrol et ve ekle
-            if "Data Source" in original_df1.columns:
-                df1_idx = df1[df1[combo_col] == row[combo_col]].index[0]
-                result_row[f"Data Source_{file1_name}"] = original_df1.loc[df1_idx, "Data Source"]
-            if "Data Source" in original_df2.columns:
-                df2_idx = df2[df2[combo_col] == row[combo_col]].index[0]
-                result_row[f"Data Source_{file2_name}"] = original_df2.loc[df2_idx, "Data Source"]
-            
-            # Seçilen sütunları ekle
-            for col in cols:
-                result_row[f"{col}_{file1_name}"] = row.get(f"{col}_{file1_name}", "")
-                result_row[f"{col}_{file2_name}"] = row.get(f"{col}_{file2_name}", "")
-            
-            # Eşleşme bilgileri
-            result_row["Match_Type"] = "Exact Match"
-            result_row["Similarity"] = 1.0
-            result_row["Source"] = f"{file1_name} vs {file2_name}"
-            
-            results.append(result_row)
-        
-        return results
-
-    def _fuzzy_match_tfidf(self, left_values: List[str], right_values: List[str], 
-                          left_indices: List[int], right_indices: List[int]) -> List[Tuple[int, int, float]]:
-        """TF-IDF tabanlı fuzzy matching (büyük veri setleri için)"""
         try:
-            if not left_values or not right_values:
-                return []
-            
-            # TF-IDF vectorizer
             vectorizer = TfidfVectorizer(
                 analyzer='char_wb',
                 ngram_range=(2, 3),
-                min_df=1,
-                max_features=10000
+                min_df=1
             )
-            
-            # Tüm değerleri birleştir ve vektörize et
-            all_values = left_values + right_values
-            tfidf_matrix = vectorizer.fit_transform(all_values)
-            
-            # Sol ve sağ matrisleri ayır
-            left_matrix = tfidf_matrix[:len(left_values)]
-            right_matrix = tfidf_matrix[len(left_values):]
-            
-            # Cosine similarity hesapla
-            similarity_matrix = cosine_similarity(left_matrix, right_matrix)
-            
-            # Eşik değeri üzerindeki eşleşmeleri bul
-            matches = []
-            rows, cols = np.where(similarity_matrix >= self.similarity_threshold)
-            
-            for row, col in zip(rows, cols):
-                similarity = similarity_matrix[row, col]
-                matches.append((left_indices[row], right_indices[col], float(similarity)))
-            
-            return matches
-            
-        except Exception as e:
-            logger.error(f"TF-IDF fuzzy matching hatası: {e}")
-            return []
+            vectors = vectorizer.fit_transform([val1, val2])
+            similarity = cosine_similarity(vectors[0], vectors[1])[0][0]
+            return float(similarity)
+        except:
+            return ratio(val1, val2)
 
-    def _fuzzy_match_levenshtein_batch(self, left_df: pd.DataFrame, right_df: pd.DataFrame, 
-                                     combo_col: str) -> List[Tuple[int, int, float]]:
-        """Batch işleme ile Levenshtein fuzzy matching"""
-        matches = []
-        
-        # Progress bar için
-        total_batches = (len(left_df) + self.batch_size - 1) // self.batch_size
-        progress_bar = st.progress(0)
-        
-        for i, batch_start in enumerate(range(0, len(left_df), self.batch_size)):
-            batch_end = min(batch_start + self.batch_size, len(left_df))
-            batch_left = left_df.iloc[batch_start:batch_end]
-            
-            for _, row1 in batch_left.iterrows():
-                val1 = row1[combo_col]
-                if not val1:
-                    continue
-                    
-                for _, row2 in right_df.iterrows():
-                    val2 = row2[combo_col]
-                    if not val2:
-                        continue
-                        
-                    sim = ratio(val1, val2)
-                    if sim >= self.similarity_threshold:
-                        matches.append((row1.name, row2.name, sim))
-            
-            # Progress güncelle
-            progress_bar.progress((i + 1) / total_batches)
-            
-            # Bellek temizliği
-            if i % 10 == 0:
-                gc.collect()
-        
-        progress_bar.empty()
-        return matches
-
-    def _fuzzy_match(self, df1: pd.DataFrame, df2: pd.DataFrame, combo_col: str,
-                    cols: List[str], file1_name: str, file2_name: str,
-                    original_df1: pd.DataFrame, original_df2: pd.DataFrame) -> List[Dict]:
-        """Fuzzy match işlemi"""
+    def _find_matches_by_columns(self, df1: pd.DataFrame, df2: pd.DataFrame, 
+                                cols: List[str], file1_name: str, file2_name: str,
+                                original_df1: pd.DataFrame, original_df2: pd.DataFrame,
+                                use_tfidf: bool = False) -> List[Dict]:
+        """Kolonları ayrı ayrı karşılaştırarak eşleşmeleri bul"""
         results = []
         
-        # Exact match'te bulunanları çıkar
-        left_only = df1[~df1[combo_col].isin(df2[combo_col])].copy()
-        right_only = df2[~df2[combo_col].isin(df1[combo_col])].copy()
+        # Şirket standart kolonları
+        company_columns = ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]
         
-        if left_only.empty or right_only.empty:
-            return results
+        # Her df1 satırını df2'deki tüm satırlarla karşılaştır
+        total_comparisons = len(df1) * len(df2)
         
-        st.info(f"Fuzzy matching başlıyor: {len(left_only)} x {len(right_only)} karşılaştırma")
+        # Progress bar
+        progress_bar = st.progress(0)
+        processed = 0
         
-        # Büyük veri seti kontrolü
-        total_comparisons = len(left_only) * len(right_only)
-        use_tfidf = (self.use_tfidf_for_large_data and 
-                    total_comparisons > self.large_data_threshold)
+        for idx1, row1 in df1.iterrows():
+            # Satır1'in tüm kolonları boş mu kontrol et
+            row1_has_data = any(self._clean_value(row1.get(col, "")) for col in cols)
+            if not row1_has_data:
+                processed += len(df2)
+                continue
+                
+            best_matches = []
+            
+            for idx2, row2 in df2.iterrows():
+                # Satır2'nin tüm kolonları boş mu kontrol et
+                row2_has_data = any(self._clean_value(row2.get(col, "")) for col in cols)
+                if not row2_has_data:
+                    processed += 1
+                    continue
+                
+                column_similarities = {}
+                total_similarity = 0
+                valid_columns = 0
+                
+                # Her kolon için benzerlik hesapla
+                for col in cols:
+                    val1 = self._clean_value(row1.get(col, ""))
+                    val2 = self._clean_value(row2.get(col, ""))
+                    
+                    if val1 and val2:  # İkisi de dolu ise
+                        if use_tfidf:
+                            sim = self._calculate_tfidf_similarity(val1, val2)
+                        else:
+                            sim = self._calculate_column_similarity(val1, val2)
+                        
+                        column_similarities[col] = sim
+                        total_similarity += sim
+                        valid_columns += 1
+                
+                # Ortalama benzerlik hesapla
+                if valid_columns > 0:
+                    avg_similarity = total_similarity / valid_columns
+                    
+                    # En az bir kolon eşik değeri geçiyorsa veya ortalama eşik geçiyorsa
+                    max_col_sim = max(column_similarities.values()) if column_similarities else 0
+                    
+                    if max_col_sim >= self.similarity_threshold or avg_similarity >= self.similarity_threshold:
+                        best_matches.append({
+                            'idx2': idx2,
+                            'avg_similarity': avg_similarity,
+                            'max_similarity': max_col_sim,
+                            'column_similarities': column_similarities,
+                            'row2': row2
+                        })
+                
+                processed += 1
+                if processed % 100 == 0:
+                    progress_bar.progress(processed / total_comparisons)
+            
+            # En iyi eşleşmeleri sonuçlara ekle
+            for match in best_matches:
+                result_row = {}
+                
+                # Şirket standart kolonlarını ekle
+                for col in company_columns:
+                    if col in original_df1.columns:
+                        result_row[f"{col}_{file1_name}"] = original_df1.loc[idx1, col]
+                    else:
+                        result_row[f"{col}_{file1_name}"] = ""
+                        
+                    if col in original_df2.columns:
+                        result_row[f"{col}_{file2_name}"] = original_df2.loc[match['idx2'], col]
+                    else:
+                        result_row[f"{col}_{file2_name}"] = ""
+                
+                # Eşleşme detayları
+                match_details = []
+                for col, sim in match['column_similarities'].items():
+                    if sim >= self.similarity_threshold:
+                        match_details.append(f"{col}: {sim:.3f}")
+                
+                # Eşleşme tipi belirleme
+                if match['max_similarity'] >= 0.95:
+                    match_type = "Exact Match"
+                elif match['max_similarity'] >= self.similarity_threshold:
+                    match_type = f"Strong Match ({use_tfidf and 'TF-IDF' or 'Levenshtein'})"
+                else:
+                    match_type = f"Partial Match ({use_tfidf and 'TF-IDF' or 'Levenshtein'})"
+                
+                result_row["Match_Type"] = match_type
+                result_row["Average_Similarity"] = round(match['avg_similarity'], 3)
+                result_row["Max_Similarity"] = round(match['max_similarity'], 3)
+                result_row["Matching_Columns"] = "; ".join(match_details)
+                result_row["Source"] = f"{file1_name} vs {file2_name}"
+                
+                results.append(result_row)
         
-        if use_tfidf:
-            st.info("🚀 Büyük veri seti tespit edildi. TF-IDF algoritması kullanılıyor...")
-            
-            left_values = left_only[combo_col].tolist()
-            right_values = right_only[combo_col].tolist()
-            left_indices = left_only.index.tolist()
-            right_indices = right_only.index.tolist()
-            
-            matches = self._fuzzy_match_tfidf(left_values, right_values, left_indices, right_indices)
-        else:
-            st.info("📝 Levenshtein algoritması kullanılıyor...")
-            matches = self._fuzzy_match_levenshtein_batch(left_only, right_only, combo_col)
+        progress_bar.empty()
+        return results
+
+    def _exact_match_by_columns(self, df1: pd.DataFrame, df2: pd.DataFrame, cols: List[str], 
+                               file1_name: str, file2_name: str, 
+                               original_df1: pd.DataFrame, original_df2: pd.DataFrame) -> List[Dict]:
+        """Kolonları ayrı ayrı exact match kontrolü"""
+        results = []
+        company_columns = ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]
         
-        # Sonuçları formatla
-        for match in matches:
-            left_idx, right_idx, similarity = match
+        # Her kolon için ayrı exact match
+        for col in cols:
+            if col not in df1.columns or col not in df2.columns:
+                continue
+                
+            # Bu kolonda exact match olanları bul (boş değerleri hariç tut)
+            df1_filtered = df1[df1[col].notna() & (df1[col].astype(str).str.strip() != "")]
+            df2_filtered = df2[df2[col].notna() & (df2[col].astype(str).str.strip() != "")]
             
-            result_row = {}
+            merged = pd.merge(df1_filtered[[col]], df2_filtered[[col]], on=col, how="inner")
             
-            # Data Source bilgileri
-            if "Data Source" in original_df1.columns:
-                result_row[f"Data Source_{file1_name}"] = original_df1.loc[left_idx, "Data Source"]
-            if "Data Source" in original_df2.columns:
-                result_row[f"Data Source_{file2_name}"] = original_df2.loc[right_idx, "Data Source"]
-            
-            # Sütun değerleri
-            for col in cols:
-                result_row[f"{col}_{file1_name}"] = df1.loc[left_idx, col] if left_idx in df1.index else ""
-                result_row[f"{col}_{file2_name}"] = df2.loc[right_idx, col] if right_idx in df2.index else ""
-            
-            # Eşleşme bilgileri
-            result_row["Match_Type"] = "Fuzzy Match (TF-IDF)" if use_tfidf else "Fuzzy Match (Levenshtein)"
-            result_row["Similarity"] = round(float(similarity), 3)
-            result_row["Source"] = f"{file1_name} vs {file2_name}"
-            
-            results.append(result_row)
+            if not merged.empty:
+                # Eşleşen değerleri bul
+                matching_values = merged[col].unique()
+                
+                for value in matching_values:
+                    if not value or str(value).strip() == "":  # Boş değerleri atla
+                        continue
+                        
+                    df1_matches = df1_filtered[df1_filtered[col] == value]
+                    df2_matches = df2_filtered[df2_filtered[col] == value]
+                    
+                    # Kartezyen çarpım (her eşleşmeyi kaydet)
+                    for _, row1 in df1_matches.iterrows():
+                        for _, row2 in df2_matches.iterrows():
+                            result_row = {}
+                            
+                            # Şirket standart kolonlarını ekle
+                            for comp_col in company_columns:
+                                if comp_col in original_df1.columns:
+                                    result_row[f"{comp_col}_{file1_name}"] = original_df1.loc[row1.name, comp_col]
+                                else:
+                                    result_row[f"{comp_col}_{file1_name}"] = ""
+                                    
+                                if comp_col in original_df2.columns:
+                                    result_row[f"{comp_col}_{file2_name}"] = original_df2.loc[row2.name, comp_col]
+                                else:
+                                    result_row[f"{comp_col}_{file2_name}"] = ""
+                            
+                            result_row["Match_Type"] = "Exact Match"
+                            result_row["Average_Similarity"] = 1.0
+                            result_row["Max_Similarity"] = 1.0
+                            result_row["Matching_Columns"] = f"{col}: 1.000"
+                            result_row["Source"] = f"{file1_name} vs {file2_name}"
+                            
+                            results.append(result_row)
         
         return results
 
     def _match_two_files(self, df1: pd.DataFrame, df2: pd.DataFrame, cols: List[str], 
                         file1_name: str, file2_name: str) -> pd.DataFrame:
-        """İki dosyayı karşılaştır"""
+        """İki dosyayı karşılaştır - Yeni algoritma"""
         try:
             start_time = time.time()
             
@@ -221,14 +233,12 @@ class OptimizedDataMatcher:
             original_df1 = df1.copy()
             original_df2 = df2.copy()
             
-            # Sütunları birleştir
-            combo_col = "_combo_col"
-            df1 = self._combine_columns(df1, cols, combo_col)
-            df2 = self._combine_columns(df2, cols, combo_col)
-            
-            # Boş değerleri filtrele
-            df1 = df1[df1[combo_col] != ""]
-            df2 = df2[df2[combo_col] != ""]
+            # Kolonları temizle
+            for col in cols:
+                if col in df1.columns:
+                    df1[col] = df1[col].apply(self._clean_value)
+                if col in df2.columns:
+                    df2[col] = df2[col].apply(self._clean_value)
             
             if df1.empty or df2.empty:
                 st.warning(f"Karşılaştırma için yeterli veri yok: {file1_name} vs {file2_name}")
@@ -238,21 +248,53 @@ class OptimizedDataMatcher:
             
             results = []
             
-            # 1. Exact Match
-            with st.spinner("🎯 Exact matching..."):
-                exact_results = self._exact_match(
-                    df1, df2, combo_col, cols, file1_name, file2_name, original_df1, original_df2
+            # 1. Exact Match (kolon bazlı)
+            with st.spinner("🎯 Exact matching (kolon bazlı)..."):
+                exact_results = self._exact_match_by_columns(
+                    df1, df2, cols, file1_name, file2_name, original_df1, original_df2
                 )
                 results.extend(exact_results)
                 st.success(f"✅ Exact match tamamlandı: {len(exact_results)} eşleşme")
             
-            # 2. Fuzzy Match
-            with st.spinner("🔍 Fuzzy matching..."):
-                fuzzy_results = self._fuzzy_match(
-                    df1, df2, combo_col, cols, file1_name, file2_name, original_df1, original_df2
+            # 2. Fuzzy Match (kolon bazlı)
+            with st.spinner("🔍 Fuzzy matching (kolon bazlı)..."):
+                # Büyük veri seti kontrolü
+                total_comparisons = len(df1) * len(df2)
+                use_tfidf = (self.use_tfidf_for_large_data and 
+                           total_comparisons > self.large_data_threshold)
+                
+                if use_tfidf:
+                    st.info("🚀 Büyük veri seti tespit edildi. TF-IDF algoritması kullanılıyor...")
+                else:
+                    st.info("📝 Levenshtein algoritması kullanılıyor...")
+                
+                fuzzy_results = self._find_matches_by_columns(
+                    df1, df2, cols, file1_name, file2_name, 
+                    original_df1, original_df2, use_tfidf
                 )
-                results.extend(fuzzy_results)
-                st.success(f"✅ Fuzzy match tamamlandı: {len(fuzzy_results)} eşleşme")
+                
+                # Exact match'te bulunanları çıkar (duplikasyonu önle)
+                exact_pairs = set()
+                for exact_result in exact_results:
+                    # Satır tanımlayıcısı oluştur
+                    identifier = (
+                        exact_result.get(f"CompanyName_{file1_name}", ""),
+                        exact_result.get(f"CompanyName_{file2_name}", "")
+                    )
+                    exact_pairs.add(identifier)
+                
+                # Fuzzy results'tan exact match'leri çıkar
+                filtered_fuzzy = []
+                for fuzzy_result in fuzzy_results:
+                    identifier = (
+                        fuzzy_result.get(f"CompanyName_{file1_name}", ""),
+                        fuzzy_result.get(f"CompanyName_{file2_name}", "")
+                    )
+                    if identifier not in exact_pairs:
+                        filtered_fuzzy.append(fuzzy_result)
+                
+                results.extend(filtered_fuzzy)
+                st.success(f"✅ Fuzzy match tamamlandı: {len(filtered_fuzzy)} eşleşme")
             
             elapsed_time = time.time() - start_time
             st.info(f"⏱️ Karşılaştırma süresi: {elapsed_time:.2f} saniye")
@@ -268,7 +310,7 @@ class OptimizedDataMatcher:
 # Streamlit Arayüzü
 def main():
     st.set_page_config(page_title="Excel Karşılaştırıcı", layout="wide")
-    st.header("📁 Optimize Edilmiş Çoklu Excel Dosyası Karşılaştırıcı")
+    st.header("📁 Optimize Edilmiş Çoklu Excel Dosyası Karşılaştırıcı (Kolon Bazlı)")
     
     # Yan panel - Ayarlar
     with st.sidebar:
@@ -277,11 +319,19 @@ def main():
         batch_size = st.number_input("Batch Boyutu:", min_value=100, max_value=5000, value=1000)
         use_tfidf = st.checkbox("Büyük veri için TF-IDF kullan", value=True)
         
-        st.subheader("📝 Bilgi")
+        st.subheader("📝 Yeni Özellikler")
+        st.success("""
+        **✨ Kolon Bazlı Eşleştirme:**
+        - Her kolon ayrı ayrı karşılaştırılır
+        - CompanyName eşleşen ama Website farklı olan kayıtlar da bulunur
+        - Eşleşen kolonlar detaylı gösterilir
+        - Partial match desteği
+        """)
+        
+        st.subheader("📊 Optimizasyonlar")
         st.info("""
-        **Optimizasyonlar:**
         - TF-IDF: Büyük veri setleri için hızlı
-        - Batch Processing: Bellek verimli
+        - Batch Processing: Bellek verimli  
         - Progress Bar: İlerleme takibi
         - Hata Yönetimi: Güvenli işlem
         """)
@@ -331,16 +381,34 @@ def main():
         
         # Ortak sütunları bul
         common_cols = list(set.intersection(*(set(df.columns) for df in dataframes.values())))
-        if not common_cols:
-            st.error("❌ Tüm dosyalarda ortak bir sütun bulunamadı!")
+        
+        # Şirket standart kolonları kontrol et
+        required_columns = ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]
+        missing_columns = []
+        
+        for col in required_columns:
+            if col not in common_cols:
+                missing_columns.append(col)
+        
+        if missing_columns:
+            st.error(f"❌ Şu gerekli kolonlar eksik: {', '.join(missing_columns)}")
+            st.info("📋 Şirket standart kolonları: Data Source, CompanyName, CompanyWebsite, CompanyMail")
             return
             
-        # Sütun seçimi
-        selected_columns = st.multiselect(
-            "Birden fazla sütun seçebilirsiniz:", 
-            sorted(common_cols),
-            help="Seçilen sütunlar birleştirilerek karşılaştırma yapılacak"
-        )
+        # Kullanıcı ek sütun seçebilir
+        additional_cols = [col for col in common_cols if col not in required_columns]
+        
+        if additional_cols:
+            st.info("✅ Şirket standart kolonları tespit edildi. İsteğe bağlı ek sütunlar seçebilirsiniz:")
+            selected_additional = st.multiselect(
+                "Ek sütunlar (opsiyonel):", 
+                sorted(additional_cols),
+                help="Karşılaştırmada kullanılacak ek sütunlar"
+            )
+            selected_columns = required_columns + selected_additional
+        else:
+            st.info("✅ Şirket standart kolonları tespit edildi.")
+            selected_columns = required_columns
 
         if selected_columns:
             col1, col2 = st.columns([1, 1])
@@ -352,7 +420,29 @@ def main():
             with col2:
                 combinations_count = len(list(combinations(dataframes.keys(), 2)))
                 st.metric("🔄 Karşılaştırma Sayısı", combinations_count)
-                st.metric("📋 Seçilen Sütun", len(selected_columns))
+                st.metric("📋 Kullanılacak Sütun", len(selected_columns))
+                
+            # Kullanılan sütunları göster
+            st.subheader("🔍 Karşılaştırmada Kullanılacak Sütunlar")
+            st.write("**Şirket Standart Kolonlar:**")
+            st.code("Data Source, CompanyName, CompanyWebsite, CompanyMail")
+            
+            if len(selected_columns) > 4:
+                additional = [col for col in selected_columns if col not in ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]]
+                st.write("**Ek Kolonlar:**")
+                st.code(", ".join(additional))
+
+            # Yeni algoritma açıklaması
+            st.subheader("🆕 Kolon Bazlı Eşleştirme Algoritması")
+            st.info("""
+            **Nasıl Çalışır:**
+            - Her satır, diğer dosyadaki tüm satırlarla karşılaştırılır
+            - Her kolon ayrı ayrı benzerlik skorları alır  
+            - Eşleşme koşulları:
+              - En az bir kolon eşik değeri geçerse ✅
+              - Veya ortalama benzerlik eşik değeri geçerse ✅
+            - Sonuçta hangi kolonların eşleştiği gösterilir
+            """)
 
             if st.button("🚀 Karşılaştırmaya Başla", type="primary"):
                 with st.spinner("🧠 Tüm dosyalar karşılaştırılıyor..."):
@@ -388,24 +478,20 @@ def main():
                     if results:
                         final_df = pd.concat(results, ignore_index=True)
                         
-                        # Sütun sıralaması
+                        # Sütun sıralaması - Şirket standardı
                         ordered_columns = []
                         
-                        # Data Source kolonları
-                        for file_name in [f.replace(".xlsx", "").replace(".xls", "") for f in dataframes.keys()]:
-                            data_source_col = f"Data Source_{file_name}"
-                            if data_source_col in final_df.columns:
-                                ordered_columns.append(data_source_col)
+                        # Şirket standart kolonları (her dosya için)
+                        company_columns = ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]
                         
-                        # Seçilen sütunlar
-                        for col in selected_columns:
+                        for col in company_columns:
                             for file_name in [f.replace(".xlsx", "").replace(".xls", "") for f in dataframes.keys()]:
                                 col_name = f"{col}_{file_name}"
                                 if col_name in final_df.columns:
                                     ordered_columns.append(col_name)
                         
                         # Eşleşme bilgileri
-                        ordered_columns.extend(["Match_Type", "Similarity", "Source"])
+                        ordered_columns.extend(["Match_Type", "Average_Similarity", "Max_Similarity", "Matching_Columns", "Source"])
                         
                         # Final dataframe
                         final_df = final_df[ordered_columns]
@@ -428,9 +514,33 @@ def main():
                         with col4:
                             st.metric("⏱️ Süre", f"{total_time:.1f}s")
                         
+                        # Match türlerine göre dağılım
+                        st.subheader("📊 Eşleşme Türleri Dağılımı")
+                        match_counts = final_df['Match_Type'].value_counts()
+                        for match_type, count in match_counts.items():
+                            st.write(f"**{match_type}:** {count:,} adet")
+                        
                         # Veri önizlemesi
                         st.subheader("📋 Sonuç Önizlemesi")
                         st.dataframe(final_df.head(100))
+                        
+                        # En çok eşleşen kolonlar
+                        if 'Matching_Columns' in final_df.columns:
+                            st.subheader("🏆 En Çok Eşleşen Kolonlar")
+                            all_matches = []
+                            for matches_str in final_df['Matching_Columns'].dropna():
+                                if matches_str:
+                                    matches = matches_str.split(';')
+                                    for match in matches:
+                                        if ':' in match:
+                                            col_name = match.split(':')[0].strip()
+                                            all_matches.append(col_name)
+                            
+                            if all_matches:
+                                from collections import Counter
+                                match_counter = Counter(all_matches)
+                                for col, count in match_counter.most_common(5):
+                                    st.write(f"**{col}:** {count:,} eşleşme")
                         
                         # İndirme butonu
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
@@ -439,7 +549,7 @@ def main():
                                 st.download_button(
                                     "📥 Tüm Eşleşmeleri İndir (.xlsx)",
                                     f,
-                                    file_name=f"eslesmeler_{int(time.time())}.xlsx",
+                                    file_name=f"kolon_bazli_eslesmeler_{int(time.time())}.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                 )
                     else:
