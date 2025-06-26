@@ -23,7 +23,7 @@ class DataMatcher:
         df1 = df1.copy()
         df2 = df2.copy()
         
-        # Orijinal dataframe'leri sakla (Exhibition Name için)
+        # Orijinal dataframe'leri sakla (Data Source için)
         original_df1 = df1.copy()
         original_df2 = df2.copy()
 
@@ -42,15 +42,15 @@ class DataMatcher:
         for _, row in merged.iterrows():
             result_row = {}
             
-            # Exhibition Name kolonunu kontrol et ve ekle (varsa)
-            if "Exhibition Name" in original_df1.columns:
-                # Orijinal index'i kullanarak Exhibition Name'i al
+            # Data Source kolonunu kontrol et ve ekle (varsa)
+            if "Data Source" in original_df1.columns:
+                # Orijinal index'i kullanarak Data Source'i al
                 df1_idx = df1[df1[combo_col] == row[combo_col]].index[0]
-                result_row[f"Exhibition Name_{file1_name}"] = original_df1.loc[df1_idx, "Exhibition Name"]
-            if "Exhibition Name" in original_df2.columns:
-                # Orijinal index'i kullanarak Exhibition Name'i al  
+                result_row[f"Data Source_{file1_name}"] = original_df1.loc[df1_idx, "Data Source"]
+            if "Data Source" in original_df2.columns:
+                # Orijinal index'i kullanarak Data Source'i al  
                 df2_idx = df2[df2[combo_col] == row[combo_col]].index[0]
-                result_row[f"Exhibition Name_{file2_name}"] = original_df2.loc[df2_idx, "Exhibition Name"]
+                result_row[f"Data Source_{file2_name}"] = original_df2.loc[df2_idx, "Data Source"]
             
             # Seçilen sütunları ekle (her iki dosya için)
             for col in cols:
@@ -76,11 +76,11 @@ class DataMatcher:
                 if val1 and val2 and sim >= self.similarity_threshold:
                     result_row = {}
                     
-                    # Exhibition Name kolonunu kontrol et ve ekle (varsa)
-                    if "Exhibition Name" in original_df1.columns:
-                        result_row[f"Exhibition Name_{file1_name}"] = original_df1.loc[row1.name, "Exhibition Name"]
-                    if "Exhibition Name" in original_df2.columns:
-                        result_row[f"Exhibition Name_{file2_name}"] = original_df2.loc[row2.name, "Exhibition Name"]
+                    # Data Source kolonunu kontrol et ve ekle (varsa)
+                    if "Data Source" in original_df1.columns:
+                        result_row[f"Data Source_{file1_name}"] = original_df1.loc[row1.name, "Data Source"]
+                    if "Data Source" in original_df2.columns:
+                        result_row[f"Data Source_{file2_name}"] = original_df2.loc[row2.name, "Data Source"]
                     
                     # Seçilen sütunları ekle (her iki dosya için)
                     for col in cols:
@@ -135,12 +135,12 @@ if uploaded_files and len(uploaded_files) >= 2:
                     if results:
                         final_df = pd.concat(results, ignore_index=True)
                         
-                        # Sütun sıralaması: Exhibition Name + Seçilen sütunlar + eşleşme bilgileri
+                        # Sütun sıralaması: Data Source + Seçilen sütunlar + eşleşme bilgileri
                         ordered_columns = []
                         
-                        # Önce Exhibition Name kolonunu ekle (varsa)
+                        # Önce Data Source kolonunu ekle (varsa)
                         for file_name in [f.replace(".xlsx", "") for f in dataframes.keys()]:
-                            exhibition_col = f"Exhibition Name_{file_name}"
+                            exhibition_col = f"Data Source_{file_name}"
                             if exhibition_col in final_df.columns:
                                 ordered_columns.append(exhibition_col)
                         
