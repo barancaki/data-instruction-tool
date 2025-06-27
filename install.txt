@@ -1,0 +1,12 @@
+requirements.txt içindekileri topluca yüklermek için
+pip install -r requirements.txt 
+
+download windows app
+https://ollama.com/download
+
+cmd run;
+ollama run llama3:8b
+" /bye " çıkış
+
+çalışması için;
+streamlit run .\1_Ana_Sayfa.py
