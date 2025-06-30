@@ -257,12 +257,6 @@ def scrape_packaging_fair(sayfa_sayisi):
                 # Firma adı
                 try:
                     firma_adi = driver.find_element(By.CSS_SELECTOR, "h1.company-title").text.strip()
-                    try:
-                        # Mail çekmek için şirket websitesine otomatik giden program
-                        firmanin_url = bing_ilk_link_al(firma_adi)
-                        firma_mail = site_icerisinden_email_bul(firmanin_url)
-                    except:
-                        firma_mail = ""
                 except:
                     firma_adi = ""
 
@@ -291,6 +285,20 @@ def scrape_packaging_fair(sayfa_sayisi):
                                 website = li.text.strip()
                 except:
                     pass
+                if website:
+                    try:
+                    # Mail çekmek için şirketin websitesine otomatik giden program
+                        firmanin_url = bing_ilk_link_al(firma_adi)
+                        firma_mail = site_icerisinden_email_bul(firmanin_url)
+                    except:
+                        firma_mail = ""
+                else:   
+                    try:
+                        # Mail çekmek için google üzerinden ilk search şirketin websitesine otomatik giden program
+                            firmanin_url = bing_ilk_link_al(firma_adi)
+                            firma_mail = site_icerisinden_email_bul(firmanin_url)
+                    except:
+                            firma_mail = ""
 
                 tablo.append({
                     "Firma Adı": firma_adi,

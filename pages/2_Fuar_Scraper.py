@@ -4,7 +4,7 @@ import streamlit as st
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
 st.sidebar.header("Fuar Scraper Aracina hos geldiniz !")
 st.sidebar.markdown('''Aracımız iki kısımdan oluşmaktadır.
-                    
+
 İlk kısımda istediğiniz bir fuarcılık sitesinden web scraping ile tablo elde etmenizi sağlar.
                     
 İkinci kısımda ise istediğiniz bir url girerek o urldeki herhangi bir websitesi hakkında bilgi edinmenizi sağlar.
