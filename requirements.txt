@@ -8,3 +8,4 @@ langchain
 langchain_ollama
 python-Levenshtein
 scikit-learn
+requests

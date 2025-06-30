@@ -9,6 +9,10 @@ import streamlit as st
 import time
 import plotly.express as px
 import platform
+import requests
+from bs4 import BeautifulSoup
+import re
+import urllib.parse
 
 # İşletim sistemi adı alınır
 os_name = platform.system()
@@ -253,6 +257,12 @@ def scrape_packaging_fair(sayfa_sayisi):
                 # Firma adı
                 try:
                     firma_adi = driver.find_element(By.CSS_SELECTOR, "h1.company-title").text.strip()
+                    try:
+                        # Mail çekmek için şirket websitesine otomatik giden program
+                        firmanin_url = bing_ilk_link_al(firma_adi)
+                        firma_mail = site_icerisinden_email_bul(firmanin_url)
+                    except:
+                        firma_mail = ""
                 except:
                     firma_adi = ""
 
@@ -287,8 +297,9 @@ def scrape_packaging_fair(sayfa_sayisi):
                     "Ülke": ulke.upper(),
                     "Telefon": telefon,
                     "Adres": adres,
-                    "Web Sitesi": website
-                })
+                    "Web Sitesi": website,
+                    "Firma Mail": firma_mail                
+                    })
 
                 print(f"  ✅ Eklendi: {firma_adi}")
 
@@ -394,3 +405,85 @@ def scrape_burtarim_fair(url):
     else:
         print(df.head())
     
+def google_ilk_link_manual(firma_adi):
+    query = urllib.parse.quote(firma_adi)
+    url = f"https://www.google.com/search?q={query}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+
+    response = requests.get(url, headers=headers, timeout=10)
+
+    # Debug için dosyaya yaz
+    with open("google_result.html", "w", encoding="utf-8") as f:
+        f.write(response.text)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    for link in soup.find_all("a"):
+        href = link.get("href")
+        if href and href.startswith("/url?q="):
+            clean_link = href.split("/url?q=")[1].split("&")[0]
+            print(f"🔗 Bulunan URL: {clean_link}")
+            return clean_link
+
+    print("❌ Hiçbir uygun link bulunamadı.")
+    return None
+
+def bing_ilk_link_al(firma_adi):
+    query = urllib.parse.quote(firma_adi)
+    url = f"https://www.bing.com/search?q={query}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    }
+
+    print(f"🔍 Bing araması yapılıyor: {firma_adi}")
+    response = requests.get(url, headers=headers, timeout=10)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # Arama sonuçlarını çek (organik ilk link genelde h2 > a içinde)
+    for result in soup.select("li.b_algo h2 a"):
+        link = result.get("href")
+        if link and link.startswith("http"):
+            print(f"🌐 Bulunan ilk link: {link}")
+            return link
+
+    print("❌ Bing sonucu bulunamadı.")
+    return None
+
+
+def site_icerisinden_email_bul(url):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("window-size=1200,800")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+
+    try:
+        print(f"🌍 Siteye gidiliyor: {url}")
+        driver.get(url)
+        time.sleep(2)
+
+        page_text = driver.page_source
+        email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+        email_list = re.findall(email_pattern, page_text)
+
+        benzersiz_mailler = list(set(email_list))
+        print(f"📬 Bulunan E-postalar: {benzersiz_mailler}")
+        return benzersiz_mailler
+
+    except Exception as e:
+        print("❌ Site içeriği alınamadı:", e)
+        return []
+
+    finally:
+        driver.quit()
+
+    # 🔁 Kullanım:
+    # firma = "2D Kimya"
+    # url = google_ilk_link_manual(firma)
+    # if url:
+    #     site_icerisinden_email_bul(url)
