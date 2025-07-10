@@ -15,7 +15,7 @@ Sol menüden app sayfasına geçerek başlayabilir veya Kullanım'a geçerek bil
 
 """)
 
-st.link_button("Go to github", "https://github.com/barancaki")
+st.link_button("Go to github", "https://github.com/barancaki/data-instruction-tool")
 st.markdown('---')
 st.link_button('Fuar Scraper için',"Fuar_Scraper")
 st.link_button('AI Scraper için',"AI_Scraper")
