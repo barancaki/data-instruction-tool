@@ -275,8 +275,9 @@ def scrape_packaging_fair(sayfa_sayisi):
                 if website:
                     try:
                     # Mail çekmek için şirketin websitesine otomatik giden program
-                        firmanin_url = bing_ilk_link_al(firma_adi)
-                        firma_mail = site_icerisinden_email_bul(firmanin_url)
+                        firma_mail = site_icerisinden_email_bul(website)
+                        if firma_mail == "team@packagingfair.com":
+                            firma_mail = "Bu websitesi artık geçerli değildir."
                     except:
                         firma_mail = ""
                 else:   
