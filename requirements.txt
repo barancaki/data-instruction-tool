@@ -9,3 +9,4 @@ langchain_ollama
 python-Levenshtein
 scikit-learn
 requests
+webdriver-manager

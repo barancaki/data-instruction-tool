@@ -13,20 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import urllib.parse
-
-# İşletim sistemi adı alınır
-os_name = platform.system()
-
-# Kontrol yapılır
-if os_name == "Darwin":
-    driver_path = "chromedriver-mac-arm64/chromedriver"
-elif os_name == "Windows":
-    driver_path = "chromedriver-win64/chromedriver.exe"
-else:
-    if st:
-        st.warning(f"Bu işletim sistemi tanımlı değil: {os_name}")
-    else:
-        print(f"Bu işletim sistemi tanımlı değil: {os_name}")
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 def scrape_replast_all_pages(url):
@@ -35,7 +22,7 @@ def scrape_replast_all_pages(url):
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
 
-    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
     tablo = []
     page_num = 1
@@ -122,7 +109,7 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
 
-    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 10)
 
     base_url = "https://platform.win-eurasia.com"
@@ -222,7 +209,7 @@ def scrape_packaging_fair(sayfa_sayisi):
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
 
-    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     base_url = "https://packagingfair.com/katilimci-listesi"
     full_url_prefix = "https://packagingfair.com"
@@ -334,7 +321,7 @@ def scrape_burtarim_fair(url):
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
 
-    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
     tablo = []
     page_num = 1
@@ -468,7 +455,7 @@ def site_icerisinden_email_bul(url):
     options.add_argument("window-size=1200,800")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     try:
         print(f"🌍 Siteye gidiliyor: {url}")
