@@ -1,12 +1,18 @@
 requirements.txt içindekileri topluca yüklermek için
-pip install -r requirements.txt 
+pip install -r requirements.txt
+mac ise
+pip3 install -r requirements.txt
 
-download windows app
+download windows app or mac app
 https://ollama.com/download
 
 cmd run;
 ollama run llama3:8b
-" /bye " çıkış
+" /bye " çıkış -> cmdden
+
+terminal run;
+ollama run llama3:8b
+" /bye " çıkış -> terminalden
 
 çalışması için;
-streamlit run .\1_Ana_Sayfa.py
+streamlit run 1_Ana_Sayfa.py
