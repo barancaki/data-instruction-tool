@@ -400,6 +400,51 @@ def scrape_burtarim_fair(url):
     else:
         print(df.head())
     
+def scrape_teknopark_firmalari():
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    url = "https://www.teknoparkistanbul.com.tr/firmalar"
+    driver.get(url)
+
+    tablo = []
+
+    try:
+        # Sayfa yüklendikten sonra firma kartları gelene kadar bekle
+        wait = WebDriverWait(driver, 10)
+        wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.firma-list div.item")))
+
+        # Firma kartlarını al
+        firma_divleri = driver.find_elements(By.CSS_SELECTOR, "div.firma-list div.item")
+        for firma in firma_divleri:
+            try:
+                firma_adi = firma.find_element(By.CSS_SELECTOR, "div.text span").text.strip()
+            except:
+                firma_adi = ""
+
+            try:
+                firma_grubu = firma.find_element(By.CSS_SELECTOR, "div.text i").text.strip()
+            except:
+                firma_grubu = ""
+
+            tablo.append({
+                "Firma Adı": firma_adi,
+                "Grubu": firma_grubu
+            })
+
+    except Exception as e:
+        st.error(f"❌ Veri çekme sırasında hata oluştu: {e}")
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    st.dataframe(df)
+
 def google_ilk_link_manual(firma_adi):
     query = urllib.parse.quote(firma_adi)
     url = f"https://www.google.com/search?q={query}"
