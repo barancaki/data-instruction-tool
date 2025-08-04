@@ -8,7 +8,6 @@ import pandas as pd
 import streamlit as st
 import time
 import plotly.express as px
-import platform
 import requests
 from bs4 import BeautifulSoup
 import re
