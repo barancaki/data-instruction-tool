@@ -443,7 +443,8 @@ def scrape_teknopark_firmalari():
         driver.quit()
 
     df = pd.DataFrame(tablo)
-    st.dataframe(df)
+    if st:
+        st.dataframe(df)
 
 def google_ilk_link_manual(firma_adi):
     query = urllib.parse.quote(firma_adi)
