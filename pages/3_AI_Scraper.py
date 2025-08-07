@@ -1,5 +1,5 @@
 import streamlit as st
-from ollama_parser import get_clean_text_from_url, parse_with_ollama
+from ai_scripts.ollama_parser import get_clean_text_from_url, parse_with_ollama
 
 st.set_page_config(page_title="AI Scraper", layout="centered")
 st.sidebar.header("AI Scraper aracina hos geldiniz !")
