@@ -92,14 +92,39 @@ def scrape_replast_all_pages(url):
 
     df = pd.DataFrame(tablo)
 
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
     if st:
         st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
         ulke_sayilari = df["Ülke"].value_counts().reset_index()
         ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
         fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
         st.plotly_chart(fig)
     else:
-        print(df.head())
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
 
 
 
@@ -198,10 +223,40 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
     driver.quit()
 
     df = pd.DataFrame(tablo)
-    print("\n🎯 TOPLAM FİRMA SAYISI:", len(df))
-    print(df.head())
+
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
     if st:
         st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
+        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+        fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
+        st.plotly_chart(fig)
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
 
 def scrape_how_all_pages(url, sayfa_sayisi):
     options = Options()
@@ -298,10 +353,40 @@ def scrape_how_all_pages(url, sayfa_sayisi):
     driver.quit()
 
     df = pd.DataFrame(tablo)
-    print("\n🎯 TOPLAM FİRMA SAYISI:", len(df))
-    print(df.head())
+
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
     if st:
         st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
+        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+        fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
+        st.plotly_chart(fig)
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
 
 def scrape_sodex_all_pages(url, sayfa_sayisi):
     options = Options()
@@ -398,10 +483,40 @@ def scrape_sodex_all_pages(url, sayfa_sayisi):
     driver.quit()
 
     df = pd.DataFrame(tablo)
-    print("\n🎯 TOPLAM FİRMA SAYISI:", len(df))
-    print(df.head())
+
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
     if st:
         st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
+        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+        fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
+        st.plotly_chart(fig)
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
 
 def scrape_packaging_fair(sayfa_sayisi):
     options = Options()
@@ -618,14 +733,39 @@ def scrape_burtarim_fair(url):
 
     df = pd.DataFrame(tablo)
 
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
     if st:
         st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
         ulke_sayilari = df["Ülke"].value_counts().reset_index()
         ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
         fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
         st.plotly_chart(fig)
     else:
-        print(df.head())
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
     
 def scrape_teknopark_firmalari():
     options = Options()
@@ -670,8 +810,40 @@ def scrape_teknopark_firmalari():
         driver.quit()
 
     df = pd.DataFrame(tablo)
+
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
     if st:
         st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
+        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+        fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
+        st.plotly_chart(fig)
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
 
 def google_ilk_link_manual(firma_adi):
     query = urllib.parse.quote(firma_adi)
