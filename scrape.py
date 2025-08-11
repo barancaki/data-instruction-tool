@@ -13,7 +13,8 @@ from bs4 import BeautifulSoup
 import re
 import urllib.parse
 from webdriver_manager.chrome import ChromeDriverManager
-
+from io import BytesIO
+from table_to_sql import save_to_sqlite
 
 def scrape_replast_all_pages(url):
     options = Options()
@@ -505,8 +506,21 @@ def scrape_packaging_fair(sayfa_sayisi):
     driver.quit()
 
     df = pd.DataFrame(tablo)
+        # 📌 SQL formatında kaydet
+    save_to_sqlite(df)
+
     if st:
         st.dataframe(df)
+        
+        # 📌 SQLite dosyasını indir
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 SQL Formatında İndir",
+                data=f,
+                file_name="fuar.db",
+                mime="application/octet-stream"
+            )
+
         ulke_sayilari = df["Ülke"].value_counts().reset_index()
         ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
         fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
