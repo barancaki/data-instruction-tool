@@ -3,13 +3,21 @@ import streamlit as st
 
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
 st.sidebar.header("Fuar Scraper Aracina hos geldiniz !")
-st.sidebar.markdown('''Aracımız iki kısımdan oluşmaktadır.
+st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
 
-İlk kısımda istediğiniz bir fuarcılık sitesinden web scraping ile tablo elde etmenizi sağlar.
+- Replast Eurasia
                     
-İkinci kısımda ise istediğiniz bir url girerek o urldeki herhangi bir websitesi hakkında bilgi edinmenizi sağlar.
+- Win Eurasia
                     
-Daha fazla bilgi edinmek için Kullanım sayfasına geçebilirsiniz.''')
+- Ambalaj Fuarı (Packaging Fair)
+                    
+- Burtarım Fuarı
+                    
+- Teknopark İstanbul (Aktif fakat Cloudflare korumalı site!)
+                    
+- Hub Of Warehouse
+                    
+- SODEX''')
 st.sidebar.text('© Baran Çakı 2025')
 
 st.header("_Fuar_ scrape :blue[aracı] ✅")
