@@ -516,19 +516,19 @@ def scrape_packaging_fair(sayfa_sayisi):
     if st:
         st.dataframe(df)
         
-        # 📥 SQLite dosyasını indir
+        # 📥 DB
         with open("fuar_data.db", "rb") as f:
             st.download_button(
-                label="📥 SQLite (.db) İndir",
+                label="📥 Database (.db) İndir",
                 data=f,
                 file_name="fuar_data.db",
                 mime="application/octet-stream"
             )
 
-        # 📥 MySQL uyumlu dump indir
+        # 📥 SQL
         with open("fuar_data.sql", "rb") as f:
             st.download_button(
-                label="📥 MySQL (.sql) İndir",
+                label="📥 SQL (.sql) İndir",
                 data=f,
                 file_name="fuar_data.sql",
                 mime="application/sql"
