@@ -202,6 +202,106 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
     if st:
         st.dataframe(df)
 
+def scrape_how_all_pages(url, sayfa_sayisi):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    wait = WebDriverWait(driver, 10)
+
+    base_url = "https://platform.hubofwarehouse.com"
+    tablo = []
+
+    for page_num in range(1, sayfa_sayisi + 1):
+        print(f"🔄 {page_num}. sayfa yükleniyor...")
+        driver.get(f"{base_url}/participants?page={page_num}")
+        time.sleep(2)
+
+        # Tüm detay linklerini topla
+        detay_linkleri = []
+        firma_adi_listesi = []
+        ulke_listesi = []
+
+        firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.cell.small-12")
+
+        for kart in firma_kartlari:
+            try:
+                link_element = kart.find_element(By.CSS_SELECTOR, "a.o.link.as-block.fx.dropshadow.for-child")
+                href = link_element.get_attribute("href")
+                if href:
+                    detay_link = href if href.startswith("http") else base_url + href
+                else:
+                    continue
+
+                firma_adi = kart.find_element(By.CLASS_NAME, "search-snippet-name").get_attribute("innerText").strip()                
+                ulke = kart.find_element(By.CLASS_NAME, "search-snippet-description").text.upper().strip()
+
+                detay_linkleri.append(detay_link)
+                firma_adi_listesi.append(firma_adi)
+                ulke_listesi.append(ulke)
+
+            except Exception as e:
+                print(f"❌ Link/firma bilgisi alınamadı: {e}")
+                continue
+
+        # Her detay sayfasına gir ve veriyi çek
+        for i, detay_link in enumerate(detay_linkleri):
+            firma_adi = firma_adi_listesi[i]
+            ulke = ulke_listesi[i]
+
+            try:
+                driver.get(detay_link)
+                time.sleep(2)
+
+                # Adres
+                try:
+                    adres_listesi = driver.find_elements(By.CSS_SELECTOR, "ul.t.set-250-regular.as-copy li")
+                    adres = " ".join([li.text.strip() for li in adres_listesi])
+                except:
+                    adres = ""
+
+                # Telefon
+                try:
+                    telefonlar = driver.find_elements(By.CSS_SELECTOR, "ul.t.set-250-regular.as-copy li a")
+                    telefon = ""
+                    for tel in telefonlar:
+                        if "Telefon" in tel.text:
+                            telefon = tel.text.replace("Telefon:", "").strip()
+                            break
+                except:
+                    telefon = ""
+
+                # Company Mail
+                try:
+                    mail_element = driver.find_element(By.CSS_SELECTOR, "a[href^='mailto:']")
+                    email = mail_element.get_attribute("href").replace("mailto:", "").strip()
+                except:
+                    email = ""
+
+                tablo.append({
+                    "Firma": firma_adi,
+                    "Ülke": ulke,
+                    "Adres": adres,
+                    "Telefon": telefon,
+                    "Company Mail": email
+                })
+
+                print(f"✅ {firma_adi} eklendi.")
+
+            except Exception as e:
+                print(f"❌ {firma_adi} için detay sayfasına gidilemedi: {e}")
+                continue
+
+    driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print("\n🎯 TOPLAM FİRMA SAYISI:", len(df))
+    print(df.head())
+    if st:
+        st.dataframe(df)
+
 def scrape_packaging_fair(sayfa_sayisi):
     options = Options()
     options.add_argument("--headless")
