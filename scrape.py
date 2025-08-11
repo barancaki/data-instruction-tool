@@ -14,7 +14,7 @@ import re
 import urllib.parse
 from webdriver_manager.chrome import ChromeDriverManager
 from io import BytesIO
-from table_to_sql import save_to_sqlite
+from table_to_sql import save_to_sqlite,create_mysql_dump_from_sqlite
 
 def scrape_replast_all_pages(url):
     options = Options()
@@ -506,19 +506,32 @@ def scrape_packaging_fair(sayfa_sayisi):
     driver.quit()
 
     df = pd.DataFrame(tablo)
-        # 📌 SQL formatında kaydet
+
+    # 📌 SQLite formatında kaydet
     save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
 
     if st:
         st.dataframe(df)
         
-        # 📌 SQLite dosyasını indir
+        # 📥 SQLite dosyasını indir
         with open("fuar_data.db", "rb") as f:
             st.download_button(
-                label="📥 SQL Formatında İndir",
+                label="📥 SQLite (.db) İndir",
                 data=f,
-                file_name="fuar.db",
+                file_name="fuar_data.db",
                 mime="application/octet-stream"
+            )
+
+        # 📥 MySQL uyumlu dump indir
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 MySQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
             )
 
         ulke_sayilari = df["Ülke"].value_counts().reset_index()
