@@ -1,4 +1,4 @@
-from scrape import scrape_replast_all_pages,scrape_win_eurasia_all_pages,scrape_packaging_fair,scrape_burtarim_fair,scrape_teknopark_firmalari,scrape_how_all_pages
+from scrape import scrape_replast_all_pages,scrape_win_eurasia_all_pages,scrape_packaging_fair,scrape_burtarim_fair,scrape_teknopark_firmalari,scrape_how_all_pages,scrape_sodex_all_pages
 import streamlit as st
 
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
@@ -56,6 +56,14 @@ if url in ["https://platform.hubofwarehouse.com/participants?page=1", "https://p
         if st.button("Tara"):
             with st.spinner("Sayfalar taranıyor..."):
                 scrape_how_all_pages(url,int(sayfa_sayisi))
+            st.success("Tarama tamamlandı!")
+
+if url in ["https://platform.sodex.com.tr/participants?new&lang=en", "https://platform.sodex.com.tr/participants","https://platform.sodex.com.tr/participants?new","https://platform.sodex.com.tr/participants?page=1"]:
+    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    if sayfa_sayisi:
+        if st.button("Tara"):
+            with st.spinner("Sayfalar taranıyor..."):
+                scrape_sodex_all_pages(url,int(sayfa_sayisi))
             st.success("Tarama tamamlandı!")
 
 st.text('© Baran Çakı 2025')
