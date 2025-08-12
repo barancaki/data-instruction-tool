@@ -1,4 +1,6 @@
-from scrape import scrape_replast_all_pages,scrape_win_eurasia_all_pages,scrape_packaging_fair,scrape_burtarim_fair,scrape_teknopark_firmalari,scrape_how_all_pages,scrape_sodex_all_pages
+from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages
+from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages
+from Scrape.tuyap_sablon2 import scrape_packaging_fair
 import streamlit as st
 
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
@@ -55,8 +57,7 @@ if url in ["https://www.burtarim.com/katilimci-listesi", "https://www.burtarim.c
 if url in ["https://www.teknoparkistanbul.com.tr/firmalar"]:
     if st.button("Tara"):
         with st.spinner("Sayfalar taranıyor..."):
-            scrape_teknopark_firmalari()
-        st.success("Tarama tamamlandı!")
+            st.success("Tarama tamamlandı!")
 
 if url in ["https://platform.hubofwarehouse.com/participants?page=1", "https://platform.hubofwarehouse.com/participants","https://platform.hubofwarehouse.com/participants?new","https://platform.hubofwarehouse.com/participants?new&lang=tr"]:
     sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
