@@ -1,4 +1,4 @@
-from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages
+from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_kapi_cam_all_pages
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair
 import streamlit as st
@@ -21,7 +21,9 @@ st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
                     
 - SODEX
                     
-- AUTOMECHANİKA''')
+- AUTOMECHANİKA
+                    
+- Pencere Kapı Cam Fuarı''')
 st.sidebar.text('© Baran Çakı 2025')
 
 st.header("_Fuar_ scrape :blue[aracı] ✅")
@@ -85,4 +87,9 @@ if url in ["https://automechanikaistanbulplus.com/participants?new&lang=en", "ht
                 scrape_automechanika_all_pages(int(sayfa_sayisi))
             st.success("Tarama tamamlandı!")
 
+if url in ["https://www.avrasyapencerefuari.com/katilimci-listesi", "https://www.avrasyapencerefuari.com/katilimci-listesi?page=1"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_pencere_kapi_cam_all_pages(url)
+        st.success("Tarama tamamlandı!")
 st.text('© Baran Çakı 2025')
