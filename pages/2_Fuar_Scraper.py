@@ -1,4 +1,4 @@
-from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_kapi_cam_all_pages,scrape_smtech_eurasia_all_pages
+from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_kapi_cam_all_pages,scrape_smtech_eurasia_all_pages,scrape_iplikfuari_all_pages,scrape_maktek_all_pages
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages
 import streamlit as st
@@ -33,7 +33,11 @@ st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
                     
 - Woodtech İstanbul Fuarı
                     
-- Expomed Fuarı''')
+- Expomed Fuarı
+                    
+- İPLİK Fuarı
+                    
+- MAKTEK Fuarı''')
 st.sidebar.text('© Baran Çakı 2025')
 
 st.header("_Fuar_ scrape :blue[aracı] ✅")
@@ -139,4 +143,15 @@ if url in ["https://expomedistanbul.com/katilimci-listesi", "https://expomedista
             scrape_replast_all_pages(url)
         st.success("Tarama tamamlandı!")
 
+if url in ["https://iplikfuari.com/katilimci-listesi", "https://iplikfuari.com/katilimci-listesi?page=1"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_iplikfuari_all_pages(url)
+        st.success("Tarama tamamlandı!")
+
+if url in ["https://maktekfuari.com/katilimci-listesi", "https://maktekfuari.com/katilimci-listesi?page=1"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_maktek_all_pages(url)
+        st.success("Tarama tamamlandı!")
 st.text('© Baran Çakı 2025')
