@@ -234,7 +234,7 @@ def scrape_burtarim_fair(url):
         st.plotly_chart(fig)
     else:
         print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
-def scrape_pencere_kapi_cam_all_pages(url):
+def scrape_pencere_all_pages(url):
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--disable-gpu")

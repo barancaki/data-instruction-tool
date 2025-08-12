@@ -1,4 +1,4 @@
-from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_kapi_cam_all_pages,scrape_smtech_eurasia_all_pages,scrape_iplikfuari_all_pages,scrape_maktek_all_pages
+from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_all_pages,scrape_smtech_eurasia_all_pages,scrape_iplikfuari_all_pages,scrape_maktek_all_pages
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages
 import streamlit as st
@@ -23,7 +23,7 @@ st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
                     
 - AUTOMECHANİKA
                     
-- Pencere Kapı Cam Fuarı
+- Pencere Fuarı
                     
 - BUMATECH (SMTECH)
                     
@@ -104,7 +104,7 @@ if url in ["https://automechanikaistanbulplus.com/participants?new&lang=en", "ht
 if url in ["https://www.avrasyapencerefuari.com/katilimci-listesi", "https://www.avrasyapencerefuari.com/katilimci-listesi?page=1"]:
     if st.button("Tara"):
         with st.spinner("Sayfalar taranıyor..."):
-            scrape_pencere_kapi_cam_all_pages(url)
+            scrape_pencere_all_pages(url)
         st.success("Tarama tamamlandı!")
 
 if url in ["https://smtech-eurasia.com/katilimci-listesi", "https://smtech-eurasia.com/katilimci-listesi?page=1"]:
