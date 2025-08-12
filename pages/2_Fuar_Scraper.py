@@ -1,5 +1,5 @@
 from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages
-from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages
+from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair
 import streamlit as st
 
@@ -19,7 +19,9 @@ st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
                     
 - Hub Of Warehouse
                     
-- SODEX''')
+- SODEX
+                    
+- AUTOMECHANİKA''')
 st.sidebar.text('© Baran Çakı 2025')
 
 st.header("_Fuar_ scrape :blue[aracı] ✅")
@@ -73,6 +75,14 @@ if url in ["https://platform.sodex.com.tr/participants?new&lang=en", "https://pl
         if st.button("Tara"):
             with st.spinner("Sayfalar taranıyor..."):
                 scrape_sodex_all_pages(url,int(sayfa_sayisi))
+            st.success("Tarama tamamlandı!")
+
+if url in ["https://automechanikaistanbulplus.com/participants?new&lang=en", "https://automechanikaistanbulplus.com/participants","https://automechanikaistanbulplus.com/participants?new","https://automechanikaistanbulplus.com/participants?page=1"]:
+    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    if sayfa_sayisi:
+        if st.button("Tara"):
+            with st.spinner("Sayfalar taranıyor..."):
+                scrape_automechanika_all_pages(int(sayfa_sayisi))
             st.success("Tarama tamamlandı!")
 
 st.text('© Baran Çakı 2025')
