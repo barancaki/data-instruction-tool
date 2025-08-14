@@ -10,6 +10,15 @@ import time
 import logging
 from typing import List, Tuple, Optional, Dict, Any
 import gc
+from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
+# Authentication kontrolü
+check_authentication()
+
+# Kullanıcı bilgilerini al
+user_info = get_user_info()
+
+# Sidebar'da kullanıcı bilgilerini göster
+show_user_info_sidebar()
 
 # Logging ayarları
 logging.basicConfig(level=logging.INFO)

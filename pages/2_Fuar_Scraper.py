@@ -3,8 +3,17 @@ from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari
 import streamlit as st
+from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
 
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
+# Authentication kontrolü
+check_authentication()
+
+# Kullanıcı bilgilerini al
+user_info = get_user_info()
+
+# Sidebar'da kullanıcı bilgilerini göster
+show_user_info_sidebar()
 st.sidebar.header("Fuar Scraper Aracina hos geldiniz !")
 st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
 

@@ -1,5 +1,14 @@
 import streamlit as st
 from ai_scripts.ollama_parser import get_clean_text_from_url, parse_with_ollama
+from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
+# Authentication kontrolü
+check_authentication()
+
+# Kullanıcı bilgilerini al
+user_info = get_user_info()
+
+# Sidebar'da kullanıcı bilgilerini göster
+show_user_info_sidebar()
 
 st.set_page_config(page_title="AI Scraper", layout="centered")
 st.sidebar.header("AI Scraper aracina hos geldiniz !")
