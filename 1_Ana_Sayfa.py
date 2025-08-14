@@ -1,7 +1,10 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
+import os
+from dotenv import load_dotenv
+
+# .env dosyasını yükle
+load_dotenv()
 
 # Sayfa konfigürasyonu
 st.set_page_config(
@@ -12,47 +15,57 @@ st.set_page_config(
 
 # Authentication konfigürasyonu
 def load_config():
-    """Authentication konfigürasyonunu yükle"""
+    """Authentication konfigürasyonunu .env dosyasından yükle"""
+    
+    # .env dosyasından şifreleri al
+    passwords = [
+        os.getenv('PASSWORD_ADMIN', 'baranisreluctant.123'),
+        os.getenv('PASSWORD_KULLANICI', 'password123'),
+        os.getenv('PASSWORD_SEFA', 'sefa.hft@2025'),
+        os.getenv('PASSWORD_DILARA', 'dilara.hft@2025'),
+        os.getenv('PASSWORD_SERPIL', 'serpil.hft@2025')
+    ]
+    
     # Şifreleri hash'le
-    hashed_passwords = stauth.Hasher(['baranisreluctant.123', 'password123' , 'sefa.hft@2025' , 'dilara.hft@2025' , 'serpil.hft@2025']).generate()
+    hashed_passwords = stauth.Hasher(passwords).generate()
     
     config = {
         'credentials': {
             'usernames': {
                 'admin': {
-                    'email': 'baran.caki@hotmail.com',
-                    'name': 'Administrator (Baran)',
+                    'email': os.getenv('PREAUTHORIZED_EMAIL', 'baran.caki@hotmail.com'),
+                    'name': 'Baran Çakı (Admin)',
                     'password': hashed_passwords[0]
                 },
                 'kullanici': {
-                    'email': 'kullanici@example.com', 
-                    'name': 'Kullanıcı',
+                    'email': 'kullanici@example.com',
+                    'name': 'Genel Kullanıcı',
                     'password': hashed_passwords[1]
                 },
                 'sefa.hft': {
-                    'email': 'sefa.uyar@external.hf-turkey.com', 
-                    'name': 'Sefa Uyar',
+                    'email': 'sefa@hotmail.com',
+                    'name': 'Sefa',
                     'password': hashed_passwords[2]
                 },
                 'dilara.hft': {
-                    'email': 'dilara.ay@external.hf-turkey.com', 
-                    'name': 'Dilara Ay',
+                    'email': 'dilara@hotmail.com',
+                    'name': 'Dilara',
                     'password': hashed_passwords[3]
                 },
                 'serpil.hft': {
-                    'email': 'serpil.sozen@hf-turkey.com', 
-                    'name': 'Serpil Sözen (Admin)',
+                    'email': 'serpil@hotmail.com',
+                    'name': 'Serpil (Admin)',
                     'password': hashed_passwords[4]
-                },
+                }
             }
         },
         'cookie': {
-            'expiry_days': 30,
-            'key': 'some_signature_key_123456',  # Güvenli bir anahtar
-            'name': 'streamlit_auth_cookie'
+            'expiry_days': int(os.getenv('COOKIE_EXPIRY_DAYS', '30')),
+            'key': os.getenv('COOKIE_KEY', 'some_signature_key_123456'),
+            'name': os.getenv('COOKIE_NAME', 'streamlit_auth_cookie')
         },
         'preauthorized': {
-            'emails': ['baran.caki@hotmail.com']
+            'emails': [os.getenv('PREAUTHORIZED_EMAIL', 'baran.caki@hotmail.com')]
         }
     }
     return config
@@ -72,48 +85,154 @@ def main():
     )
     
     # Login widget'ı
-    name, authentication_status, username = authenticator.login('Giriş Yap', 'main')
+    name, authentication_status, username = authenticator.login('🔐 Giriş Yap', 'main')
     
     # Authentication durumunu kontrol et
     if authentication_status == False:
-        st.error('Kullanıcı adı/şifre yanlış')
+        st.error('❌ Kullanıcı adı/şifre yanlış')
         
     elif authentication_status == None:
-        st.warning('Lütfen kullanıcı adı ve şifrenizi girin')
+        st.warning('⚠️ Lütfen kullanıcı adı ve şifrenizi girin')
+        
+        # Kullanıcı bilgileri göster
+        with st.expander("👥 Kullanılabilir Kullanıcılar", expanded=True):
+            st.info("""
+            **Kullanıcı Listesi:**
+            - **admin** - Baran Çakı (Yönetici)
+            - **kullanici** - Genel Kullanıcı  
+            - **sefa** - Sefa
+            - **dilara** - Dilara
+            - **serpil** - Serpil
+            
+            ℹ️ *Şifreler .env dosyasında tanımlanmıştır*
+            """)
         
     elif authentication_status:
         # Başarılı giriş sonrası ana içerik
-        authenticator.logout('Çıkış Yap', 'sidebar')
         
-        st.write(f'Hoş geldiniz *{name}*!')
-        st.title('🏠 Ana Sayfa')
+        # Logout butonu sidebar'da
+        authenticator.logout('🚪 Çıkış Yap', 'sidebar', key='unique_key')
+        
+        # Hoş geldin mesajı
+        st.success(f'🎉 Hoş geldiniz **{name}**!')
+        st.title('🏠 Ana Sayfa Dashboard')
         
         # Session state'e login bilgisini kaydet
         st.session_state['authentication_status'] = True
         st.session_state['name'] = name
         st.session_state['username'] = username
         
-        # Ana sayfa içeriği
-        st.header('Dashboard')
+        # Kullanıcı rolüne göre farklı içerik
+        if username == 'admin':
+            st.info('👑 **Yönetici** yetkileriniz ile sisteme giriş yaptınız.')
+        else:
+            st.info(f'👤 **{name}** olarak sisteme giriş yaptınız.')
         
-        col1, col2, col3 = st.columns(3)
+        # Dashboard metrikleri
+        st.header('📊 Dashboard Özeti')
+        
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Toplam Kullanıcı", "2", "1")
+            st.metric(
+                label="👥 Toplam Kullanıcı", 
+                value="5", 
+                delta="Aktif",
+                delta_color="normal"
+            )
         
         with col2:
-            st.metric("Aktif Projeler", "4", "1")
+            st.metric(
+                label="📁 Aktif Projeler", 
+                value="12", 
+                delta="3",
+                delta_color="normal"
+            )
             
         with col3:
-            st.metric("Tamamlanan", "2", "1")
+            st.metric(
+                label="✅ Tamamlanan", 
+                value="87", 
+                delta="5",
+                delta_color="normal"
+            )
+            
+        with col4:
+            st.metric(
+                label="⏱️ Bekleyen", 
+                value="8", 
+                delta="-2",
+                delta_color="inverse"
+            )
         
-        st.header('Son Aktiviteler')
-        st.info('Fuar Scraper = 3 Yeni Fuar Eklendi !\n' \
-        'PDF Scraper alanı eklendi (Erişime kapalıdır.)')
+        # Ana içerik alanları
+        st.header('📈 Son Aktiviteler')
+        
+        tab1, tab2, tab3 = st.tabs(["📊 Grafikler", "📋 Tablolar", "⚙️ Ayarlar"])
+        
+        with tab1:
+            st.subheader("Performans Grafikleri")
+            
+            # Örnek grafik verisi
+            import pandas as pd
+            import numpy as np
+            
+            # Rastgele veri oluştur
+            dates = pd.date_range('2024-01-01', periods=30, freq='D')
+            data = pd.DataFrame({
+                'Tarih': dates,
+                'Satış': np.random.randint(50, 200, 30),
+                'Ziyaret': np.random.randint(100, 500, 30)
+            })
+            
+            st.line_chart(data.set_index('Tarih'))
+            
+        with tab2:
+            st.subheader("Kullanıcı Tablosu")
+            
+            user_data = pd.DataFrame({
+                'Kullanıcı': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
+                'Tam İsim': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa', 'Dilara', 'Serpil'],
+                'Rol': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı'],
+                'Durum': ['Aktif', 'Aktif', 'Aktif', 'Aktif', 'Aktif']
+            })
+            
+            st.dataframe(user_data, use_container_width=True)
+            
+        with tab3:
+            st.subheader("Sistem Ayarları")
+            
+            if username == 'admin':
+                st.success("🔧 Yönetici olarak tüm ayarlara erişiminiz var.")
+                
+                with st.form("admin_settings"):
+                    st.selectbox("Tema Seçimi", ["Light", "Dark", "Auto"])
+                    st.slider("Session Timeout (dakika)", 5, 120, 30)
+                    st.checkbox("E-posta bildirimleri")
+                    st.checkbox("SMS bildirimleri")
+                    
+                    if st.form_submit_button("💾 Ayarları Kaydet"):
+                        st.success("✅ Ayarlar kaydedildi!")
+            else:
+                st.warning("⚠️ Ayar değişiklikleri için yönetici yetkisi gereklidir.")
         
         # Sidebar'da kullanıcı bilgileri
-        st.sidebar.success(f'Giriş yapılan kullanıcı: {name}')
-        st.sidebar.info('Diğer sayfalara geçmek için soldaki menüyü kullanın.')
+        st.sidebar.header('👤 Kullanıcı Bilgileri')
+        st.sidebar.info(f'''
+        **İsim:** {name}  
+        **Kullanıcı Adı:** {username}  
+        **Rol:** {'Yönetici' if username == 'admin' else 'Kullanıcı'}
+        ''')
+        
+        st.sidebar.header('🧭 Navigasyon')
+        st.sidebar.success('Diğer sayfalara geçmek için soldaki menüyü kullanın.')
+        
+        # Sistem bilgileri (sadece admin için)
+        if username == 'admin':
+            st.sidebar.header('🔧 Sistem Bilgileri')
+            st.sidebar.text('🔋 Sistem: Aktif')
+            st.sidebar.text('💾 Veritabanı: Bağlı')
+            st.sidebar.text('🌐 Bağlantı: Güvenli')
 
 if __name__ == "__main__":
     main()

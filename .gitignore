@@ -12,6 +12,4 @@ fuar_data.sql
 ollama_parser.cpython-313.pyc
 scrape.cpython-313.pyc
 table_to_sql.cpython-313.pyc
-
-#şifre saklamak için
-1_Ana_Sayfa.py
+.env
