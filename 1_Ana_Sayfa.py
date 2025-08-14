@@ -19,11 +19,11 @@ def load_config():
     
     # .env dosyasından şifreleri al
     passwords = [
-        os.getenv('PASSWORD_ADMIN', 'baranisreluctant.123'),
-        os.getenv('PASSWORD_KULLANICI', 'password123'),
-        os.getenv('PASSWORD_SEFA', 'sefa.hft@2025'),
-        os.getenv('PASSWORD_DILARA', 'dilara.hft@2025'),
-        os.getenv('PASSWORD_SERPIL', 'serpil.hft@2025')
+        os.getenv('PASSWORD_ADMIN'),
+        os.getenv('PASSWORD_KULLANICI'),
+        os.getenv('PASSWORD_SEFA'),
+        os.getenv('PASSWORD_DILARA'),
+        os.getenv('PASSWORD_SERPIL')
     ]
     
     # Şifreleri hash'le
@@ -33,7 +33,7 @@ def load_config():
         'credentials': {
             'usernames': {
                 'admin': {
-                    'email': os.getenv('PREAUTHORIZED_EMAIL', 'baran.caki@hotmail.com'),
+                    'email': os.getenv('PREAUTHORIZED_EMAIL'),
                     'name': 'Baran Çakı (Admin)',
                     'password': hashed_passwords[0]
                 },
@@ -65,7 +65,7 @@ def load_config():
             'name': os.getenv('COOKIE_NAME', 'streamlit_auth_cookie')
         },
         'preauthorized': {
-            'emails': [os.getenv('PREAUTHORIZED_EMAIL', 'baran.caki@hotmail.com')]
+            'emails': [os.getenv('PREAUTHORIZED_EMAIL')]
         }
     }
     return config
@@ -93,19 +93,6 @@ def main():
         
     elif authentication_status == None:
         st.warning('⚠️ Lütfen kullanıcı adı ve şifrenizi girin')
-        
-        # Kullanıcı bilgileri göster
-        with st.expander("👥 Kullanılabilir Kullanıcılar", expanded=True):
-            st.info("""
-            **Kullanıcı Listesi:**
-            - **admin** - Baran Çakı (Yönetici)
-            - **kullanici** - Genel Kullanıcı  
-            - **sefa** - Sefa
-            - **dilara** - Dilara
-            - **serpil** - Serpil
-            
-            ℹ️ *Şifreler .env dosyasında tanımlanmıştır*
-            """)
         
     elif authentication_status:
         # Başarılı giriş sonrası ana içerik
@@ -144,23 +131,23 @@ def main():
         with col2:
             st.metric(
                 label="📁 Aktif Projeler", 
-                value="12", 
-                delta="3",
+                value="4", 
+                delta="Aktif",
                 delta_color="normal"
             )
             
         with col3:
             st.metric(
                 label="✅ Tamamlanan", 
-                value="87", 
-                delta="5",
+                value="4", 
+                delta="0",
                 delta_color="normal"
             )
             
         with col4:
             st.metric(
                 label="⏱️ Bekleyen", 
-                value="8", 
+                value="3", 
                 delta="-2",
                 delta_color="inverse"
             )
@@ -181,8 +168,8 @@ def main():
             dates = pd.date_range('2024-01-01', periods=30, freq='D')
             data = pd.DataFrame({
                 'Tarih': dates,
-                'Satış': np.random.randint(50, 200, 30),
-                'Ziyaret': np.random.randint(100, 500, 30)
+                'Proje': np.random.randint(50, 200, 30),
+                'Gelişim': np.random.randint(100, 500, 30)
             })
             
             st.line_chart(data.set_index('Tarih'))
@@ -192,9 +179,9 @@ def main():
             
             user_data = pd.DataFrame({
                 'Kullanıcı': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
-                'Tam İsim': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa', 'Dilara', 'Serpil'],
+                'Tam İsim': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
                 'Rol': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı'],
-                'Durum': ['Aktif', 'Aktif', 'Aktif', 'Aktif', 'Aktif']
+                'Durum': ['Aktif', 'Pasif', 'Aktif', 'Aktif', 'Aktif']
             })
             
             st.dataframe(user_data, use_container_width=True)
