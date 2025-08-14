@@ -1,6 +1,7 @@
 from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_all_pages,scrape_smtech_eurasia_all_pages,scrape_iplikfuari_all_pages,scrape_maktek_all_pages
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages
+from Scrape.bagimsiz_sablonlar import scrape_evchargeshow
 import streamlit as st
 
 st.set_page_config(page_title="Fuar Scraper", layout="centered")
@@ -37,7 +38,9 @@ st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
                     
 - İPLİK Fuarı
                     
-- MAKTEK Fuarı''')
+- MAKTEK Fuarı
+                    
+- EvCharge Show Fuarı''')
 st.sidebar.text('© Baran Çakı 2025')
 
 st.header("_Fuar_ scrape :blue[aracı] ✅")
@@ -153,5 +156,11 @@ if url in ["https://maktekfuari.com/katilimci-listesi", "https://maktekfuari.com
     if st.button("Tara"):
         with st.spinner("Sayfalar taranıyor..."):
             scrape_maktek_all_pages(url)
+        st.success("Tarama tamamlandı!")
+
+if url in ["https://www.evchargeshow.com/exhibitor"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_evchargeshow()
         st.success("Tarama tamamlandı!")
 st.text('© Baran Çakı 2025')
