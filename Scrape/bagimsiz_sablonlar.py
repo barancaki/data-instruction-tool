@@ -177,7 +177,7 @@ def scrape_atechfuari():
                 website = driver.find_element(By.CSS_SELECTOR, "a[href^='http']").get_attribute("href")
             except:
                 pass
-                if website:
+            if website:
                     try:
                     # Mail çekmek için şirketin websitesine otomatik giden program
                         firma_mail = site_icerisinden_email_bul(website)
@@ -185,7 +185,7 @@ def scrape_atechfuari():
                             firma_mail = "Bu websitesi artık geçerli değildir."
                     except:
                         firma_mail = ""
-                else:   
+            else:   
                     try:
                         # Mail çekmek için google üzerinden ilk search şirketin websitesine otomatik giden program
                             firmanin_url = bing_ilk_link_al(firma_adi)

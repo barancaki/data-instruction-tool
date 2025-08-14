@@ -166,7 +166,7 @@ if url in ["https://www.evchargeshow.com/exhibitor"]:
             scrape_evchargeshow()
         st.success("Tarama tamamlandı!")
 
-if url in ["https://atechfuari.com/firmalar/"]:
+if url in ["https://atechfuari.com/firmalar/" , "https://atechfuari.com/firmalar"]:
     if st.button("Tara"):
         with st.spinner("Sayfalar taranıyor..."):
             scrape_atechfuari()
