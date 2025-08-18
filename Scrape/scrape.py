@@ -60,7 +60,7 @@ def google_ilk_link_manual(firma_adi):
     return None
 
 def bing_ilk_link_al(firma_adi):
-    query = urllib.parse.quote(firma_adi)
+    query = urllib.parse.quote(f"{firma_adi} resmi web sitesi")
     url = f"https://www.bing.com/search?q={query}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
@@ -70,12 +70,19 @@ def bing_ilk_link_al(firma_adi):
     response = requests.get(url, headers=headers, timeout=10)
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # Arama sonuçlarını çek (organik ilk link genelde h2 > a içinde)
+    # Sonuçları gez
     for result in soup.select("li.b_algo h2 a"):
         link = result.get("href")
-        if link and link.startswith("http"):
-            print(f"🌐 Bulunan ilk link: {link}")
-            return link
+        if not link or not link.startswith("http"):
+            continue
+
+        # ❌ Sosyal medya linklerini geç
+        yasakli = ["facebook.com", "linkedin.com", "instagram.com", "twitter.com", "trendyol", "hepsiburada", "amazon"]
+        if any(kelime in link for kelime in yasakli):
+            continue
+
+        print(f"🌐 Seçilen link: {link}")
+        return link
 
     print("❌ Bing sonucu bulunamadı.")
     return None
