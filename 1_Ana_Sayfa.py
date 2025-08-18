@@ -180,7 +180,7 @@ def main():
             user_data = pd.DataFrame({
                 'Kullanıcı': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
                 'Tam İsim': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
-                'Rol': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı'],
+                'Rol': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Yönetici'],
                 'Durum': ['Aktif', 'Pasif', 'Aktif', 'Aktif', 'Aktif']
             })
             
