@@ -2,6 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari
+from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 import streamlit as st
 from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
 
@@ -51,7 +52,11 @@ st.sidebar.markdown('''Fuar Scraper Tool Kitinde Aktif Olan Siteler :
                     
 - EvCharge Show Fuarı
                     
-- ATech Fuarı''')
+- ATech Fuarı
+                    
+- Kalite Fuarı
+                    
+- Mobisadimex''')
 st.sidebar.text('© Baran Çakı 2025')
 
 st.header("_Fuar_ scrape :blue[aracı] ✅")
@@ -179,5 +184,17 @@ if url in ["https://atechfuari.com/firmalar/" , "https://atechfuari.com/firmalar
     if st.button("Tara"):
         with st.spinner("Sayfalar taranıyor..."):
             scrape_atechfuari()
+        st.success("Tarama tamamlandı!")
+
+if url in ["https://kalitefuari.com/katilimci-listesi/","https://kalitefuari.com/katilimci-listesi"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_kalitefuari()
+        st.success("Tarama tamamlandı!")
+
+if url in ["https://www.mobisadimex.com/2024-katilimci-listesi","https://www.mobisadimex.com/2024-katilimci-listesi/"]:
+    if st.button("Tara"):
+        with st.spinner("Sayfalar taranıyor..."):
+            scrape_mobisadimex()
         st.success("Tarama tamamlandı!")
 st.text('© Baran Çakı 2025')
