@@ -10,5 +10,10 @@ python-Levenshtein
 scikit-learn
 requests
 webdriver-manager
-streamlit-authenticator==0.2.3
+streamlit-authenticator
 passlib
+mcp
+asyncio
+ollama
+lxml
+regex
