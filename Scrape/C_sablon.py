@@ -159,10 +159,29 @@ def scrape_mobisadimex():
 
     df = pd.DataFrame(tablo)
 
-    # 📌 SQLite kaydet
+    # 📌 SQLite formatında kaydet
     save_to_sqlite(df)
-    # 📌 MySQL dump
+    # 📌 MySQL uyumlu dump oluştur
     create_mysql_dump_from_sqlite()
 
-    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
-    print(df.head())
+    if st:
+        st.dataframe(df)
+
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+        print(df.head())
