@@ -333,7 +333,6 @@ class OptimizedDataMatcher:
 
 # Streamlit Arayüzü
 def main():
-    st.set_page_config(page_title="Excel Karşılaştırıcı", layout="wide")
     st.header("📁 Optimize Edilmiş Çoklu Excel Dosyası Karşılaştırıcı (Kolon Bazlı)")
     
     # Yan panel - Ayarlar

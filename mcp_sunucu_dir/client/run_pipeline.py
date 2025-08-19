@@ -1,8 +1,6 @@
-import sys
-import os
 import asyncio
 
-from MCP.mcp_server.mcp_server import MCPServer
+from mcp_sunucu_dir.mcp_server.mcp_server import MCPServer
 from mcp.client.stdio import stdio_client  # MCP client stdio helper
 
 async def main():

@@ -10,7 +10,6 @@ user_info = get_user_info()
 # Sidebar'da kullanıcı bilgilerini göster
 show_user_info_sidebar()
 
-st.set_page_config(page_title="AI Scraper", layout="centered")
 st.sidebar.header("AI Scraper aracina hos geldiniz !")
 st.sidebar.markdown('''## 🤖 AI ile Web Sitesi Analizi
 
