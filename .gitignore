@@ -14,3 +14,4 @@ scrape.cpython-313.pyc
 table_to_sql.cpython-313.pyc
 .env
 venv
+*.pyc
