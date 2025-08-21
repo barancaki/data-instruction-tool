@@ -8,7 +8,7 @@ load_dotenv()
 
 # Sayfa konfigürasyonu
 st.set_page_config(
-    page_title="Ana Sayfa",
+    page_title="Home Page",
     page_icon="🏠",
     layout="wide"
 )
@@ -85,24 +85,24 @@ def main():
     )
     
     # Login widget'ı
-    name, authentication_status, username = authenticator.login('🔐 Giriş Yap', 'main')
+    name, authentication_status, username = authenticator.login('🔐 Login', 'main')
     
     # Authentication durumunu kontrol et
     if authentication_status == False:
-        st.error('❌ Kullanıcı adı/şifre yanlış')
+        st.error('❌ Username or password is wrong')
         
     elif authentication_status == None:
-        st.warning('⚠️ Lütfen kullanıcı adı ve şifrenizi girin')
+        st.warning('⚠️ Please enter your username and password')
         
     elif authentication_status:
         # Başarılı giriş sonrası ana içerik
         
         # Logout butonu sidebar'da
-        authenticator.logout('🚪 Çıkış Yap', 'sidebar', key='unique_key')
+        authenticator.logout('🚪 Log out', 'sidebar', key='unique_key')
         
         # Hoş geldin mesajı
-        st.success(f'🎉 Hoş geldiniz **{name}**!')
-        st.title('🏠 Ana Sayfa Dashboard')
+        st.success(f'🎉 Welcome **{name}**!')
+        st.title('🏠 Home Page Dashboard')
         
         # Session state'e login bilgisini kaydet
         st.session_state['authentication_status'] = True
@@ -111,54 +111,56 @@ def main():
         
         # Kullanıcı rolüne göre farklı içerik
         if username == 'admin':
-            st.info('👑 **Yönetici** yetkileriniz ile sisteme giriş yaptınız.')
+            st.info('👑 You have logged in with your **administrator** privileges.')
+        elif username == 'serpil.hft':
+            st.info('👑 You have logged in with your **administrator** privileges.')
         else:
-            st.info(f'👤 **{name}** olarak sisteme giriş yaptınız.')
+            st.info(f'👤 You have logged into the system as **{name}**.')
         
         # Dashboard metrikleri
-        st.header('📊 Dashboard Özeti')
+        st.header('📊 Dashboard Summary')
         
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric(
-                label="👥 Toplam Kullanıcı", 
+                label="👥 Total users", 
                 value="5", 
-                delta="Aktif",
+                delta="Active",
                 delta_color="normal"
             )
         
         with col2:
             st.metric(
-                label="📁 Aktif Projeler", 
+                label="📁 Active projects", 
                 value="4", 
-                delta="Aktif",
+                delta="Active",
                 delta_color="normal"
             )
             
         with col3:
             st.metric(
-                label="✅ Tamamlanan", 
-                value="4", 
+                label="✅ Completed", 
+                value="3", 
                 delta="0",
                 delta_color="normal"
             )
             
         with col4:
             st.metric(
-                label="⏱️ Bekleyen", 
-                value="3", 
-                delta="-2",
+                label="⏱️ Waiting", 
+                value="1", 
+                delta="-1",
                 delta_color="inverse"
             )
         
         # Ana içerik alanları
-        st.header('📈 Son Aktiviteler')
+        st.header('📈 Last Activitys')
         
-        tab1, tab2, tab3 = st.tabs(["📊 Grafikler", "📋 Tablolar", "⚙️ Ayarlar"])
+        tab1, tab2, tab3 = st.tabs(["📊 Graphics", "📋 User Info Table", "⚙️ Settings"])
         
         with tab1:
-            st.subheader("Performans Grafikleri")
+            st.subheader("Performance Graphics")
             
             # Örnek grafik verisi
             import pandas as pd
@@ -175,51 +177,51 @@ def main():
             st.line_chart(data.set_index('Tarih'))
             
         with tab2:
-            st.subheader("Kullanıcı Tablosu")
+            st.subheader("User Table")
             
             user_data = pd.DataFrame({
-                'Kullanıcı': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
-                'Tam İsim': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
-                'Rol': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Yönetici'],
-                'Durum': ['Aktif', 'Pasif', 'Aktif', 'Aktif', 'Aktif']
+                'User': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
+                'Full Name': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
+                'Role': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Yönetici'],
+                'Status': ['Aktif', 'Pasif', 'Aktif', 'Aktif', 'Aktif']
             })
             
             st.dataframe(user_data, use_container_width=True)
             
         with tab3:
-            st.subheader("Sistem Ayarları")
+            st.subheader("System Settings")
             
-            if username == 'admin':
-                st.success("🔧 Yönetici olarak tüm ayarlara erişiminiz var.")
+            if username == 'admin' or username == 'serpil.hft':
+                st.success("🔧 As an administrator, you have access to all settings.")
                 
                 with st.form("admin_settings"):
-                    st.selectbox("Tema Seçimi", ["Light", "Dark", "Auto"])
-                    st.slider("Session Timeout (dakika)", 5, 120, 30)
-                    st.checkbox("E-posta bildirimleri")
-                    st.checkbox("SMS bildirimleri")
+                    st.selectbox("Theme Selection", ["Light", "Dark", "Auto"])
+                    st.slider("Session Timeout (minute)", 5, 120, 30)
+                    st.checkbox("E-mail notifications")
+                    st.checkbox("SMS notifications")
                     
-                    if st.form_submit_button("💾 Ayarları Kaydet"):
-                        st.success("✅ Ayarlar kaydedildi!")
+                    if st.form_submit_button("💾 Save all changes"):
+                        st.success("✅ Saved all changes.")
             else:
-                st.warning("⚠️ Ayar değişiklikleri için yönetici yetkisi gereklidir.")
+                st.warning("⚠️ Administrator privileges are required to make changes to settings.")
         
         # Sidebar'da kullanıcı bilgileri
-        st.sidebar.header('👤 Kullanıcı Bilgileri')
+        st.sidebar.header('👤 User Info')
         st.sidebar.info(f'''
         **İsim:** {name}  
         **Kullanıcı Adı:** {username}  
-        **Rol:** {'Yönetici' if username == 'admin' else 'Kullanıcı'}
+        **Rol:** {'Admin' if username == 'admin' or username == 'serpil.hft' else 'User'}
         ''')
         
-        st.sidebar.header('🧭 Navigasyon')
-        st.sidebar.success('Diğer sayfalara geçmek için soldaki menüyü kullanın.')
+        st.sidebar.header('🧭 Navigation')
+        st.sidebar.success('Use the menu on the left to navigate to other pages.')
         
         # Sistem bilgileri (sadece admin için)
         if username == 'admin':
-            st.sidebar.header('🔧 Sistem Bilgileri')
-            st.sidebar.text('🔋 Sistem: Aktif')
-            st.sidebar.text('💾 Veritabanı: Bağlı')
-            st.sidebar.text('🌐 Bağlantı: Güvenli')
+            st.sidebar.header('🔧 System Informations')
+            st.sidebar.text('🔋 System: Active')
+            st.sidebar.text('💾 Database: Linked')
+            st.sidebar.text('🌐 Web App: Secured')
 
 if __name__ == "__main__":
     main()
