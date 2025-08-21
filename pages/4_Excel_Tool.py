@@ -79,7 +79,7 @@ class OptimizedDataMatcher:
         comparison_cols = self._get_comparison_columns(cols)
         
         if not comparison_cols:
-            st.warning("Karşılaştırma için uygun kolon bulunamadı!")
+            st.warning("No suitable column found for comparison!")
             return results
         
         # Her df1 satırını df2'deki tüm satırlarla karşılaştır
@@ -265,32 +265,32 @@ class OptimizedDataMatcher:
                     df2[col] = df2[col].apply(self._clean_value)
             
             if df1.empty or df2.empty:
-                st.warning(f"Karşılaştırma için yeterli veri yok: {file1_name} vs {file2_name}")
+                st.warning(f"Not enough data for comparison: {file1_name} vs {file2_name}")
                 return pd.DataFrame()
             
-            st.info(f"📊 Karşılaştırılıyor: {file1_name} ({len(df1)} kayıt) vs {file2_name} ({len(df2)} kayıt)")
+            st.info(f"📊 Comparing: {file1_name} ({len(df1)} records) vs {file2_name} ({len(df2)} records)")
             
             results = []
             
             # 1. Exact Match (kolon bazlı, Data Source hariç)
-            with st.spinner("🎯 Exact matching (kolon bazlı, Data Source hariç)..."):
+            with st.spinner("🎯 Exact matching (column-based, excluding Data Source)..."):
                 exact_results = self._exact_match_by_columns(
                     df1, df2, cols, file1_name, file2_name, original_df1, original_df2
                 )
                 results.extend(exact_results)
-                st.success(f"✅ Exact match tamamlandı: {len(exact_results)} eşleşme")
+                st.success(f"✅ Exact match completed: {len(exact_results)} matches")
             
             # 2. Fuzzy Match (kolon bazlı, Data Source hariç)
-            with st.spinner("🔍 Fuzzy matching (kolon bazlı, Data Source hariç)..."):
+            with st.spinner("🔍 Fuzzy matching (column-based, excluding Data Source)..."):
                 # Büyük veri seti kontrolü
                 total_comparisons = len(df1) * len(df2)
                 use_tfidf = (self.use_tfidf_for_large_data and 
                            total_comparisons > self.large_data_threshold)
                 
                 if use_tfidf:
-                    st.info("🚀 Büyük veri seti tespit edildi. TF-IDF algoritması kullanılıyor...")
+                    st.info("🚀 A large data set has been detected. The TF-IDF algorithm is being used...")
                 else:
-                    st.info("📝 Levenshtein algoritması kullanılıyor...")
+                    st.info("📝 The Levenshtein algorithm is used...")
                 
                 fuzzy_results = self._find_matches_by_columns(
                     df1, df2, cols, file1_name, file2_name, 
@@ -318,57 +318,57 @@ class OptimizedDataMatcher:
                         filtered_fuzzy.append(fuzzy_result)
                 
                 results.extend(filtered_fuzzy)
-                st.success(f"✅ Fuzzy match tamamlandı: {len(filtered_fuzzy)} eşleşme")
+                st.success(f"✅ Fuzzy match completed: {len(filtered_fuzzy)} matches")
             
             elapsed_time = time.time() - start_time
-            st.info(f"⏱️ Karşılaştırma süresi: {elapsed_time:.2f} saniye")
+            st.info(f"⏱️ Comparison time: {elapsed_time:.2f} seconds")
             
             return pd.DataFrame(results) if results else pd.DataFrame()
             
         except Exception as e:
-            st.error(f"❌ Karşılaştırma hatası ({file1_name} vs {file2_name}): {str(e)}")
+            st.error(f"❌ Comparison error ({file1_name} vs {file2_name}): {str(e)}")
             logger.error(f"Match error: {e}")
             return pd.DataFrame()
 
 
 # Streamlit Arayüzü
 def main():
-    st.header("📁 Optimize Edilmiş Çoklu Excel Dosyası Karşılaştırıcı (Kolon Bazlı)")
+    st.header("📁 Optimized Multi-Excel File Comparator (Column-Based)")
     
     # Yan panel - Ayarlar
     with st.sidebar:
-        st.subheader("⚙️ Ayarlar")
-        similarity = st.slider("Benzerlik Eşiği (%):", 0, 100, 70)
-        batch_size = st.number_input("Batch Boyutu:", min_value=100, max_value=5000, value=1000)
-        use_tfidf = st.checkbox("Büyük veri için TF-IDF kullan", value=True)
+        st.subheader("⚙️ Settings")
+        similarity = st.slider("Similarity Threshold (%):", 0, 100, 70)
+        batch_size = st.number_input("Batch Size:", min_value=100, max_value=5000, value=1000)
+        use_tfidf = st.checkbox("Use TF-IDF for big data", value=True)
         
-        st.subheader("📝 Yeni Özellikler")
+        st.subheader("📝 New Features")
         st.success("""
-        **✨ Kolon Bazlı Eşleştirme:**
-        - Her kolon ayrı ayrı karşılaştırılır
-        - **Data Source karşılaştırmada kullanılmaz**
-        - CompanyName, Website, Mail kolonları karşılaştırılır
-        - Eşleşen kolonlar detaylı gösterilir
-        - Partial match desteği
+        **✨ Column-based matching:**
+        - Each column is compared separately
+        - **Data Source is not used in the comparison**
+        - CompanyName, Website, and Mail columns are compared
+        - Matched columns are displayed in detail
+        - Partial match support
         """)
         
-        st.subheader("📊 Optimizasyonlar")
+        st.subheader("📊 Optimizations")
         st.info("""
-        - TF-IDF: Büyük veri setleri için hızlı
-        - Batch Processing: Bellek verimli  
-        - Progress Bar: İlerleme takibi
-        - Hata Yönetimi: Güvenli işlem
+        - TF-IDF: Fast for large data sets
+        - Batch Processing: Memory efficient
+        - Progress Bar: Progress tracking
+        - Error Management: Secure processing
         """)
     
     # Ana içerik
     uploaded_files = st.file_uploader(
-        "Birden fazla Excel dosyasını buraya yükleyin", 
+        "Upload multiple Excel files here", 
         type=["xlsx", "xls"], 
         accept_multiple_files=True
     )
 
     if uploaded_files and len(uploaded_files) >= 2:
-        st.subheader("📄 Dosya Önizlemeleri")
+        st.subheader("📄 File Previews")
 
         dataframes = {}
         total_rows = 0
@@ -376,32 +376,32 @@ def main():
         # Dosyaları yükle
         for file in uploaded_files:
             try:
-                with st.spinner(f"📂 {file.name} yükleniyor..."):
+                with st.spinner(f"📂 {file.name} loading..."):
                     df = pd.read_excel(file)
                     if df.empty:
-                        st.warning(f"⚠️ {file.name} boş!")
+                        st.warning(f"⚠️ {file.name} empty!")
                         continue
                     
                     dataframes[file.name] = df
                     total_rows += len(df)
                     
                     # Önizleme
-                    with st.expander(f"📋 {file.name} ({len(df):,} kayıt)"):
+                    with st.expander(f"📋 {file.name} ({len(df):,} entries)"):
                         st.dataframe(df.head())
                         
             except Exception as e:
-                st.error(f"❌ {file.name} dosyası okunamadı: {str(e)}")
+                st.error(f"❌ {file.name} file cannot be read: {str(e)}")
                 continue
 
         if not dataframes:
-            st.error("❌ Hiçbir dosya başarıyla yüklenemedi!")
+            st.error("❌ No files were successfully uploaded!")
             return
             
         # Performans uyarısı
         if total_rows > 50000:
-            st.warning(f"⚠️ Toplam {total_rows:,} kayıt tespit edildi. İşlem uzun sürebilir.")
+            st.warning(f"⚠️ A total of {total_rows:,} records were found. The process may take a while.")
 
-        st.subheader("🔗 Karşılaştırılacak Ortak Sütunları Seçin")
+        st.subheader("🔗 Select Common Columns to Compare")
         
         # Ortak sütunları bul
         common_cols = list(set.intersection(*(set(df.columns) for df in dataframes.values())))
@@ -415,70 +415,70 @@ def main():
                 missing_columns.append(col)
         
         if missing_columns:
-            st.error(f"❌ Şu gerekli kolonlar eksik: {', '.join(missing_columns)}")
-            st.info("📋 Şirket standart kolonları: Data Source, CompanyName, CompanyWebsite, CompanyMail")
+            st.error(f"❌ The following required columns are missing: {', '.join(missing_columns)}")
+            st.info("📋 Company standard columns: Data Source, CompanyName, CompanyWebsite, CompanyMail")
             return
             
         # Kullanıcı ek sütun seçebilir
         additional_cols = [col for col in common_cols if col not in required_columns]
         
         if additional_cols:
-            st.info("✅ Şirket standart kolonları tespit edildi. İsteğe bağlı ek sütunlar seçebilirsiniz:")
+            st.info("✅ Company standard columns have been identified. You can select additional columns as desired:")
             selected_additional = st.multiselect(
-                "Ek sütunlar (opsiyonel):", 
+                "Additional columns (optional):", 
                 sorted(additional_cols),
-                help="Karşılaştırmada kullanılacak ek sütunlar"
+                help="Additional columns to be used in the comparison"
             )
             selected_columns = required_columns + selected_additional
         else:
-            st.info("✅ Şirket standart kolonları tespit edildi.")
+            st.info("✅ Company standard columns have been identified.")
             selected_columns = required_columns
 
         if selected_columns:
             col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.metric("📁 Dosya Sayısı", len(dataframes))
-                st.metric("📊 Toplam Kayıt", f"{total_rows:,}")
+                st.metric("📁 Number of Files", len(dataframes))
+                st.metric("📊 Total Records", f"{total_rows:,}")
             
             with col2:
                 combinations_count = len(list(combinations(dataframes.keys(), 2)))
-                st.metric("🔄 Karşılaştırma Sayısı", combinations_count)
+                st.metric("🔄 Number of Comparisons", combinations_count)
                 # Karşılaştırmada kullanılacak kolon sayısı (Data Source hariç)
                 comparison_cols = [col for col in selected_columns if col != "Data Source"]
-                st.metric("📋 Karşılaştırma Kolonu", len(comparison_cols))
+                st.metric("📋 Comparison Column", len(comparison_cols))
                 
             # Kullanılan sütunları göster
-            st.subheader("🔍 Karşılaştırmada Kullanılacak Sütunlar")
-            st.write("**Çıktıda Gösterilecek Kolonlar:**")
+            st.subheader("🔍 Columns to be Used in Comparison")
+            st.write("**Columns to be Displayed in the Output:**")
             st.code("Data Source, CompanyName, CompanyWebsite, CompanyMail")
             
-            st.write("**Karşılaştırmada Kullanılacak Kolonlar (Data Source hariç):**")
+            st.write("**Columns to be used in comparison (excluding Data Source):**")
             comparison_cols = [col for col in selected_columns if col != "Data Source"]
             st.code(", ".join(comparison_cols))
             
             if len(selected_columns) > 4:
                 additional = [col for col in selected_columns if col not in ["Data Source", "CompanyName", "CompanyWebsite", "CompanyMail"]]
                 if additional:
-                    st.write("**Ek Karşılaştırma Kolonları:**")
+                    st.write("**Additional Comparison Columns:**")
                     st.code(", ".join(additional))
 
             # Yeni algoritma açıklaması
-            st.subheader("🆕 Kolon Bazlı Eşleştirme Algoritması")
+            st.subheader("🆕 Column-based Matching Algorithm")
             st.info("""
-            **Nasıl Çalışır:**
-            - Her satır, diğer dosyadaki tüm satırlarla karşılaştırılır
-            - **Data Source kolonu karşılaştırmada kullanılmaz** (sadece çıktıda gösterilir)
-            - CompanyName, CompanyWebsite, CompanyMail kolonları karşılaştırılır
-            - Her kolon ayrı ayrı benzerlik skorları alır  
-            - Eşleşme koşulları:
-              - En az bir kolon eşik değeri geçerse ✅
-              - Veya ortalama benzerlik eşik değeri geçerse ✅
-            - Sonuçta hangi kolonların eşleştiği gösterilir
+            **How it works:**
+            - Each row is compared with all rows in the other file
+            - **The Data Source column is not used in the comparison** (it is only displayed in the output)
+            - The CompanyName, CompanyWebsite, and CompanyMail columns are compared
+            - Each column receives separate similarity scores
+            - Matching conditions:
+            - If at least one column exceeds the threshold value ✅
+            - Or if the average similarity exceeds the threshold value ✅
+            - The result shows which columns match
             """)
 
-            if st.button("🚀 Karşılaştırmaya Başla", type="primary"):
-                with st.spinner("🧠 Tüm dosyalar karşılaştırılıyor..."):
+            if st.button("🚀 Start Comparing", type="primary"):
+                with st.spinner("🧠 All files are being compared..."):
                     start_time = time.time()
                     
                     # Matcher oluştur
@@ -532,12 +532,12 @@ def main():
                         # Sonuçları göster
                         total_time = time.time() - start_time
                         
-                        st.success(f"🎉 Eşleşmeler tamamlandı!")
+                        st.success(f"🎉 Matches completed!")
                         
                         # Metrikler
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:
-                            st.metric("📈 Toplam Eşleşme", f"{len(final_df):,}")
+                            st.metric("📈 Total Match", f"{len(final_df):,}")
                         with col2:
                             exact_matches = len(final_df[final_df['Match_Type'] == 'Exact Match'])
                             st.metric("🎯 Exact Match", f"{exact_matches:,}")
@@ -545,21 +545,21 @@ def main():
                             fuzzy_matches = len(final_df) - exact_matches
                             st.metric("🔍 Fuzzy Match", f"{fuzzy_matches:,}")
                         with col4:
-                            st.metric("⏱️ Süre", f"{total_time:.1f}s")
+                            st.metric("⏱️ Time", f"{total_time:.1f}s")
                         
                         # Match türlerine göre dağılım
-                        st.subheader("📊 Eşleşme Türleri Dağılımı")
+                        st.subheader("📊 Distribution of Match Types")
                         match_counts = final_df['Match_Type'].value_counts()
                         for match_type, count in match_counts.items():
-                            st.write(f"**{match_type}:** {count:,} adet")
+                            st.write(f"**{match_type}:** {count:,} number")
                         
                         # Veri önizlemesi
-                        st.subheader("📋 Sonuç Önizlemesi")
+                        st.subheader("📋 Preview Results")
                         st.dataframe(final_df.head(100))
                         
                         # En çok eşleşen kolonlar
                         if 'Matching_Columns' in final_df.columns:
-                            st.subheader("🏆 En Çok Eşleşen Kolonlar")
+                            st.subheader("🏆 Most Matched Columns")
                             all_matches = []
                             for matches_str in final_df['Matching_Columns'].dropna():
                                 if matches_str:
@@ -573,22 +573,22 @@ def main():
                                 from collections import Counter
                                 match_counter = Counter(all_matches)
                                 for col, count in match_counter.most_common(5):
-                                    st.write(f"**{col}:** {count:,} eşleşme")
+                                    st.write(f"**{col}:** {count:,} match")
                         
                         # İndirme butonu
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
                             final_df.to_excel(tmp.name, index=False)
                             with open(tmp.name, "rb") as f:
                                 st.download_button(
-                                    "📥 Tüm Eşleşmeleri İndir (.xlsx)",
+                                    "📥 Download All Matches (.xlsx)",
                                     f,
                                     file_name=f"kolon_bazli_eslesmeler_{int(time.time())}.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                 )
                     else:
-                        st.warning("😔 Hiç eşleşme bulunamadı.")
+                        st.warning("😔 No matches found.")
         else:
-            st.warning("⚠️ Lütfen karşılaştırmak için en az bir sütun seçin.")
+            st.warning("⚠️ Please select at least one column to compare.")
 
 
 if __name__ == "__main__":
