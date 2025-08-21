@@ -155,7 +155,7 @@ def main():
             )
         
         # Ana içerik alanları
-        st.header('📈 Last Activitys')
+        st.header('📈 Last Activities')
         
         tab1, tab2, tab3 = st.tabs(["📊 Graphics", "📋 User Info Table", "⚙️ Settings"])
         
@@ -169,21 +169,21 @@ def main():
             # Rastgele veri oluştur
             dates = pd.date_range('2024-01-01', periods=30, freq='D')
             data = pd.DataFrame({
-                'Tarih': dates,
-                'Proje': np.random.randint(50, 200, 30),
-                'Gelişim': np.random.randint(100, 500, 30)
+                'Date': dates,
+                'Project': np.random.randint(50, 200, 30),
+                'Improve': np.random.randint(100, 500, 30)
             })
             
-            st.line_chart(data.set_index('Tarih'))
+            st.line_chart(data.set_index('Date'))
             
         with tab2:
             st.subheader("User Table")
             
             user_data = pd.DataFrame({
                 'User': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
-                'Full Name': ['Baran Çakı', 'Genel Kullanıcı', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
-                'Role': ['Yönetici', 'Kullanıcı', 'Kullanıcı', 'Kullanıcı', 'Yönetici'],
-                'Status': ['Aktif', 'Pasif', 'Aktif', 'Aktif', 'Aktif']
+                'Full Name': ['Baran Çakı', 'User', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
+                'Role': ['Admin', 'User', 'User', 'User', 'Admin'],
+                'Status': ['Active', 'Disabled', 'Active', 'Active', 'Active']
             })
             
             st.dataframe(user_data, use_container_width=True)
@@ -208,9 +208,9 @@ def main():
         # Sidebar'da kullanıcı bilgileri
         st.sidebar.header('👤 User Info')
         st.sidebar.info(f'''
-        **İsim:** {name}  
-        **Kullanıcı Adı:** {username}  
-        **Rol:** {'Admin' if username == 'admin' or username == 'serpil.hft' else 'User'}
+        **Name:** {name}  
+        **User Name:** {username}  
+        **Role:** {'Admin' if username == 'admin' or username == 'serpil.hft' else 'User'}
         ''')
         
         st.sidebar.header('🧭 Navigation')
