@@ -11,11 +11,11 @@ def check_authentication():
     Returns: True eğer giriş yapılmışsa, False aksi halde
     """
     if 'authentication_status' not in st.session_state or not st.session_state['authentication_status']:
-        st.warning('⚠️ Bu sayfaya erişim için giriş yapmalısınız!')
-        st.info('👈 Lütfen Ana Sayfa\'ya giderek giriş yapın.')
+        st.warning('⚠️ You must log in to access this page!')
+        st.info('👈 Please go to the Home Page and log in.')
         
-        if st.button("🏠 Ana Sayfaya Git"):
-            st.switch_page("1_Ana_Sayfa.py")
+        if st.button("🏠 Go to Home Page"):
+            st.switch_page("1_Home_Page.py")
             
         st.stop()  # Sayfanın geri kalanını göstermez
         return False
@@ -41,21 +41,21 @@ def show_user_info_sidebar():
         username = st.session_state.get('username', '')
         name = st.session_state.get('name', '')
         
-        st.sidebar.header('👤 Kullanıcı Bilgileri')
-        st.sidebar.success(f'**{name}** olarak giriş yaptınız')
-        st.sidebar.info(f'Kullanıcı adı: `{username}`')
+        st.sidebar.header('👤 User Information')
+        st.sidebar.success(f'You have logged in as **{name}**')
+        st.sidebar.info(f'Username: `{username}`')
         
         # Rol bilgisi
         if username == 'admin':
-            st.sidebar.info('🔑 **Yönetici** yetkileriniz var')
+            st.sidebar.info('🔑 You have **administrator** privileges.')
         
         # Çıkış yap butonu
-        if st.sidebar.button('🚪 Çıkış Yap', key='sidebar_logout'):
+        if st.sidebar.button('🚪 Log Out', key='sidebar_logout'):
             # Session state'i temizle
             st.session_state['authentication_status'] = False
             st.session_state['name'] = None
             st.session_state['username'] = None
-            st.switch_page("1_Ana_Sayfa.py")
+            st.switch_page("1_Home_Page.py")
 
 def is_admin():
     """
