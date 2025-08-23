@@ -30,7 +30,7 @@ if url in ["https://replasteurasia.com/katilimci-listesi", "https://replasteuras
         st.success("The scan is complete!")
 
 if url in ["https://platform.win-eurasia.com/participants?page=1", "https://platform.win-eurasia.com/participants","https://platform.win-eurasia.com/participants?new","https://platform.win-eurasia.com/participants?new&lang=tr"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -38,7 +38,7 @@ if url in ["https://platform.win-eurasia.com/participants?page=1", "https://plat
             st.success("The scan is complete!")
 
 if url in ["https://packagingfair.com/katilimci-listesi"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -57,7 +57,7 @@ if url in ["https://www.teknoparkistanbul.com.tr/firmalar"]:
             st.success("The scan is complete!")
 
 if url in ["https://platform.hubofwarehouse.com/participants?page=1", "https://platform.hubofwarehouse.com/participants","https://platform.hubofwarehouse.com/participants?new","https://platform.hubofwarehouse.com/participants?new&lang=tr"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -65,7 +65,7 @@ if url in ["https://platform.hubofwarehouse.com/participants?page=1", "https://p
             st.success("The scan is complete!")
 
 if url in ["https://platform.sodex.com.tr/participants?new&lang=en", "https://platform.sodex.com.tr/participants","https://platform.sodex.com.tr/participants?new","https://platform.sodex.com.tr/participants?page=1"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -73,7 +73,7 @@ if url in ["https://platform.sodex.com.tr/participants?new&lang=en", "https://pl
             st.success("The scan is complete!")
 
 if url in ["https://automechanikaistanbulplus.com/participants?new&lang=en", "https://automechanikaistanbulplus.com/participants","https://automechanikaistanbulplus.com/participants?new","https://automechanikaistanbulplus.com/participants?page=1"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -93,7 +93,7 @@ if url in ["https://smtech-eurasia.com/katilimci-listesi", "https://smtech-euras
         st.success("The scan is complete!")
 
 if url in ["https://plasteurasia.com/katilimci-listesi"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -101,7 +101,7 @@ if url in ["https://plasteurasia.com/katilimci-listesi"]:
             st.success("The scan is complete!")
 
 if url in ["https://www.intermobistanbul.com/katilimci-listesi"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
@@ -109,7 +109,7 @@ if url in ["https://www.intermobistanbul.com/katilimci-listesi"]:
             st.success("The scan is complete!")
 
 if url in ["https://www.woodtechistanbul.com/katilimci-listesi"]:
-    sayfa_sayisi = st.text_input("Kaçıncı sayfaya kadar scrape etmek istiyorsunuz ?")
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
     if sayfa_sayisi:
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):

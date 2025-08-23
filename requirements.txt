@@ -10,7 +10,7 @@ python-Levenshtein
 scikit-learn
 requests
 webdriver-manager
-streamlit-authenticator
+streamlit-authenticator==0.2.3
 passlib
 mcp
 asyncio
