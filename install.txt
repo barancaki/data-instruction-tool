@@ -7,12 +7,12 @@ download windows app or mac app
 https://ollama.com/download
 
 cmd run;
-ollama run llama3:8b
+ollama run gpt-oss:20b
 " /bye " çıkış -> cmdden
 
 terminal run;
-ollama run llama3:8b
+ollama run gpt-oss:20b
 " /bye " çıkış -> terminalden
 
 çalışması için;
-streamlit run 1_Ana_Sayfa.py
+streamlit run 1_Home_Page.py
