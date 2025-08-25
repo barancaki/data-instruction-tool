@@ -16,7 +16,7 @@ st.sidebar.markdown('''## 🤖 Website Analysis with AI
 With the help of artificial intelligence, you can extract the information you want from the trade fair website in natural language.
 
 🔧 Artificial Intelligence Model Used:
-•    Model: llama3:8b
+•    Model: gpt-oss:20b
 
 •    Infrastructure: Runs locally via Ollama
 

@@ -13,7 +13,7 @@ template = (
     "3. If nothing matches, output empty string.\n"
 )
 
-model = OllamaLLM(model="llama3:8b", max_tokens=512, temperature=0.3)
+model = OllamaLLM(model="gpt-oss:20b")
 
 prompt = ChatPromptTemplate.from_template(template)
 chain = prompt | model
