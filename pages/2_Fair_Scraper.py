@@ -45,7 +45,7 @@ if url in ["https://packagingfair.com/katilimci-listesi"]:
                 scrape_packaging_fair(int(sayfa_sayisi))
             st.success("The scan is complete!")
 
-if url in ["https://www.burtarim.com/katilimci-listesi", "https://www.burtarim.com/katilimci-listesi?page=1"]:
+if url in ["https://www.konyatarimfuari.com/katilimci-listesi", "https://www.konyatarimfuari.com/katilimci-listesi?page=1"]:
     if st.button("Scan"):
         with st.spinner("Pages are being scanned..."):
             scrape_burtarim_fair(url)
