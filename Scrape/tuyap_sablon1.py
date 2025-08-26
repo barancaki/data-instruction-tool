@@ -137,7 +137,7 @@ def scrape_burtarim_fair(url):
     page_num = 1
 
     while True:
-        url = f"https://www.burtarim.com/katilimci-listesi?page={page_num}"
+        url = f"https://www.konyatarimfuari.com/katilimci-listesi?page={page_num}"
         driver.get(url)
         time.sleep(3)
 
