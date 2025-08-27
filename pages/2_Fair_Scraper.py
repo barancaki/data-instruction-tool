@@ -1,6 +1,6 @@
 from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,scrape_pencere_all_pages,scrape_smtech_eurasia_all_pages,scrape_iplikfuari_all_pages,scrape_maktek_all_pages
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
-from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages
+from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 import streamlit as st
@@ -157,4 +157,20 @@ if url in ["https://www.mobisadimex.com/2024-katilimci-listesi","https://www.mob
         with st.spinner("Pages are being scanned..."):
             scrape_mobisadimex()
         st.success("The scan is complete!")
+
+if url in ["https://www.texhibitionist.com/katilimcilar"]:
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
+    if sayfa_sayisi:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_texhibitionist_all_pages(int(sayfa_sayisi))
+            st.success("The scan is complete!")
+
+if url in ["https://exhibitors.bauma.de/en/exhibitors-and-products/exhibitors-brand-names"]:
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
+    if sayfa_sayisi:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_bauma_all_exhibitors(int(sayfa_sayisi))
+            st.success("The scan is complete!")
 st.text('© Baran Çakı 2025')

@@ -565,3 +565,380 @@ def scrape_woodtech_all_pages(sayfa_sayisi):
         st.plotly_chart(fig)
     else:
         print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+def scrape_texhibitionist_all_pages(sayfa_sayisi):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    base_url = "https://www.texhibitionist.com/katilimcilar"
+    full_url_prefix = "https://www.texhibitionist.com"
+    tablo = []
+
+    for page_num in range(1, sayfa_sayisi + 1):
+        page_url = f"{base_url}?page={page_num}"
+        print(f"\n🔄 {page_num}. sayfa yükleniyor: {page_url}")
+        driver.get(page_url)
+        time.sleep(2)
+
+        try:
+            # Ana tablo elementini bul
+            ana_tablo = driver.find_element(By.CSS_SELECTOR, "div.row.row-cols-2.row-cols-lg-3.g-2.g-lg-4.gy-5")
+            
+            # Tek firma elementlerini bul
+            firma_elements = ana_tablo.find_elements(By.CSS_SELECTOR, "div.col a")
+            firma_linkleri = []
+            
+            for a_tag in firma_elements:
+                href = a_tag.get_attribute("href")
+                if href:
+                    full_link = href if href.startswith("http") else full_url_prefix + "/" + href.lstrip("/")
+                    firma_linkleri.append(full_link)
+                    print(f"🔗 Firma linki bulundu: {full_link}")
+        except Exception as e:
+            print(f"❌ Sayfa {page_num} linkleri çekilemedi: {e}")
+            continue
+
+        # Her firma detayına gir
+        for link in firma_linkleri:
+            print(f"  🔍 Firma detayına giriliyor: {link}")
+            try:
+                driver.get(link)
+                time.sleep(2)
+
+                # Firma adı
+                try:
+                    firma_adi = driver.find_element(By.CSS_SELECTOR, "div.title").text.strip()
+                except:
+                    firma_adi = ""
+
+                # Email
+                try:
+                    email_key = driver.find_element(By.XPATH, "//div[@class='key'][contains(text(), 'E-mail')]")
+                    email = email_key.find_element(By.XPATH, "following-sibling::*[1]").text.strip()
+                except:
+                    email = ""
+
+                # Telefon
+                try:
+                    telefon_key = driver.find_element(By.XPATH, "//div[@class='key'][contains(text(), 'Telefon')]")
+                    telefon = telefon_key.find_element(By.XPATH, "following-sibling::*[1]").text.strip()
+                except:
+                    telefon = ""
+
+                # Web Sitesi
+                try:
+                    website_key = driver.find_element(By.XPATH, "//div[@class='key'][contains(text(), 'Web Site')]")
+                    website_element = website_key.find_element(By.XPATH, "following-sibling::*[1]")
+                    # Eğer a tagı varsa href'i al, yoksa text'i al
+                    try:
+                        website = website_element.find_element(By.TAG_NAME, "a").get_attribute("href")
+                    except:
+                        website = website_element.text.strip()
+                except:
+                    website = ""
+
+                # Adres
+                try:
+                    adres_element = driver.find_element(By.CSS_SELECTOR, "div.address")
+                    adres = adres_element.text.strip().replace('\n', ' ')
+                except:
+                    adres = ""
+
+                tablo.append({
+                    "Firma Adı": firma_adi,
+                    "Email": email,
+                    "Telefon": telefon,
+                    "Adres": adres,
+                    "Web Sitesi": website
+                })
+
+                print(f"  ✅ Eklendi: {firma_adi}")
+
+            except Exception as e:
+                print(f"  ❌ Firma detay alınamadı: {e}")
+                continue
+
+    driver.quit()
+
+    df = pd.DataFrame(tablo)
+
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
+    if st:
+        st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
+        # Email alanına göre firma dağılımı (email olanlar vs olmayanlar)
+        email_stats = df['Email'].apply(lambda x: 'Email Var' if x and x.strip() else 'Email Yok').value_counts().reset_index()
+        email_stats.columns = ["Email Durumu", "Firma Sayısı"]
+        fig = px.bar(email_stats, x="Email Durumu", y="Firma Sayısı", title="Email Durumuna Göre Firma Dağılımı")
+        st.plotly_chart(fig)
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+def scrape_bauma_all_exhibitors(max_load_more_clicks=50, debug_mode=False):
+    options = Options()
+    if not debug_mode:  # Debug modunda headless kapalı
+        options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    # Ana sayfa URL'i
+    base_url = "https://exhibitors.bauma.de/en/exhibitors-and-products/exhibitors-brand-names/"
+    full_url_prefix = "https://exhibitors.bauma.de"
+    tablo = []
+
+    print(f"\n🔄 Ana sayfa yükleniyor: {base_url}")
+    driver.get(base_url)
+    time.sleep(5)
+
+    # Load More butonuna sürekli tıkla
+    load_more_count = 0
+    while load_more_count < max_load_more_clicks:
+        try:
+            # Load More butonunu bul - farklı seçiciler dene
+            load_more_button = None
+            
+            # Farklı seçiciler dene
+            selectors = [
+                "tr.lazymore",
+                "tr[class*='lazymore']",
+                "td:contains('Load more')",
+                "tr:contains('Load more')"
+            ]
+            
+            for selector in selectors:
+                try:
+                    if "contains" in selector:
+                        load_more_button = driver.find_element(By.XPATH, f"//td[contains(text(), 'Load more')]/..")
+                    else:
+                        load_more_button = driver.find_element(By.CSS_SELECTOR, selector)
+                    if load_more_button:
+                        break
+                except:
+                    continue
+            
+            if not load_more_button:
+                print(f"✅ Load More butonu bulunamadı, scraping tamamlandı")
+                break
+            
+            # Butona tıkla
+            driver.execute_script("arguments[0].click();", load_more_button)
+            print(f"🔄 Load More butonuna tıklandı ({load_more_count + 1}. kez)")
+            
+            # Yeni içeriğin yüklenmesi için bekle
+            time.sleep(4)
+            load_more_count += 1
+            
+        except Exception as e:
+            print(f"✅ Load More işlemi tamamlandı: {e}")
+            break
+
+    # Tüm firma linklerini topla
+    try:
+        firma_linkleri = []
+        
+        # Ana firma kartlarını bul
+        firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "td.content_company")
+        print(f"🔍 {len(firma_kartlari)} firma kartı bulundu")
+        
+        for kart in firma_kartlari:
+            try:
+                # Her kartın içindeki linki bul (ilk div.col-sm-2 a veya treffer-titel a)
+                link_selectors = [
+                    "div.col-sm-2 a[href*='exhibitorDetail']",
+                    "div.treffer-titel a[href*='exhibitorDetail']"
+                ]
+                
+                for selector in link_selectors:
+                    try:
+                        link_element = kart.find_element(By.CSS_SELECTOR, selector)
+                        href = link_element.get_attribute("href")
+                        if href and "exhibitorDetail" in href:
+                            firma_linkleri.append(href)
+                            break
+                    except:
+                        continue
+            except:
+                continue
+                
+        # Tekrar eden linkleri kaldır
+        firma_linkleri = list(set(firma_linkleri))
+        print(f"🔗 Toplam {len(firma_linkleri)} unique firma linki bulundu")
+        
+        if len(firma_linkleri) == 0:
+            print("❌ Hiç firma linki bulunamadı, sayfa yapısını kontrol et")
+            # Debug için sayfa kaynağını yazdır
+            try:
+                all_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='exhibitor']")
+                print(f"📋 Sayfada bulunan exhibitor linkleri: {len(all_links)}")
+                for i, link in enumerate(all_links[:3]):  # İlk 3 linki göster
+                    print(f"  Link {i+1}: {link.get_attribute('href')}")
+            except:
+                pass
+            driver.quit()
+            return
+        
+    except Exception as e:
+        print(f"❌ Firma linkleri çekilemedi: {e}")
+        driver.quit()
+        return
+
+    # Her firma detayına gir
+    for i, link in enumerate(firma_linkleri, 1):
+        print(f"  🔍 ({i}/{len(firma_linkleri)}) Firma detayına giriliyor: {link}")
+        try:
+            driver.get(link)
+            time.sleep(2)
+
+            # Firma adı
+            try:
+                firma_adi = driver.find_element(By.CSS_SELECTOR, "div.contentblock_firma h1").text.strip()
+            except:
+                firma_adi = ""
+
+            # Adres bilgisi
+            try:
+                adres_element = driver.find_element(By.CSS_SELECTOR, "div.exhibitordetails-locationinfo p")
+                adres = adres_element.text.strip().replace('\n', ' ')
+            except:
+                adres = ""
+
+            # İletişim bilgileri
+            email, telefon, website = "", "", ""
+            try:
+                contact_list = driver.find_elements(By.CSS_SELECTOR, "div.exhibitordetails-contactinfo ul.exhibitordetails-contactinfo-list li")
+                
+                for li in contact_list:
+                    try:
+                        label = li.find_element(By.CSS_SELECTOR, "div:first-child").text.strip().lower()
+                        value_div = li.find_element(By.CSS_SELECTOR, "div:last-child")
+                        
+                        if "phone" in label:
+                            telefon = value_div.text.strip()
+                        elif "e-mail" in label or "email" in label:
+                            try:
+                                # E-mail linkini bul
+                                email_link = value_div.find_element(By.TAG_NAME, "a")
+                                email = email_link.get_attribute("href").replace("mailto:", "")
+                                # URL decode işlemi
+                                import urllib.parse
+                                email = urllib.parse.unquote(email)
+                            except:
+                                email = value_div.text.strip()
+                        elif "website" in label:
+                            try:
+                                # Website linkini bul
+                                website_link = value_div.find_element(By.TAG_NAME, "a")
+                                website = website_link.get_attribute("href")
+                            except:
+                                website = value_div.text.strip()
+                    except:
+                        continue
+                        
+            except Exception as e:
+                print(f"    ⚠️ İletişim bilgileri alınamadı: {e}")
+
+            tablo.append({
+                "Firma Adı": firma_adi,
+                "Email": email,
+                "Telefon": telefon,
+                "Adres": adres,
+                "Web Sitesi": website
+            })
+
+            print(f"  ✅ Eklendi: {firma_adi}")
+
+        except Exception as e:
+            print(f"  ❌ Firma detay alınamadı: {e}")
+            continue
+
+    driver.quit()
+
+    df = pd.DataFrame(tablo)
+    
+    # Boş DataFrame kontrolü
+    if df.empty:
+        print("❌ Hiç veri bulunamadı, işlem sonlandırılıyor")
+        return df
+
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # 📌 SQLite formatında kaydet
+    try:
+        save_to_sqlite(df)
+        print("✅ SQLite kaydı tamamlandı")
+    except Exception as e:
+        print(f"❌ SQLite kayıt hatası: {e}")
+
+    # 📌 MySQL uyumlu dump oluştur
+    try:
+        create_mysql_dump_from_sqlite()
+        print("✅ MySQL dump oluşturuldu")
+    except Exception as e:
+        print(f"❌ MySQL dump hatası: {e}")
+
+    if st:
+        st.dataframe(df)
+        
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+
+        # Email alanına göre firma dağılımı
+        email_stats = df['Email'].apply(lambda x: 'Email Var' if x and x.strip() else 'Email Yok').value_counts().reset_index()
+        email_stats.columns = ["Email Durumu", "Firma Sayısı"]
+        fig = px.bar(email_stats, x="Email Durumu", y="Firma Sayısı", title="Email Durumuna Göre Firma Dağılımı")
+        st.plotly_chart(fig)
+        
+        # Ülke dağılımı (adresten çıkararak)
+        try:
+            df['Ülke'] = df['Adres'].str.split('\n').str[-1].str.strip()
+            ulke_sayilari = df['Ülke'].value_counts().head(10).reset_index()
+            ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+            fig2 = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="En Çok Firma Bulunan 10 Ülke")
+            st.plotly_chart(fig2)
+        except:
+            pass
+            
+    else:
+        print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
