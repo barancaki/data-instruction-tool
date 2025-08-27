@@ -719,45 +719,119 @@ def scrape_bauma_all_exhibitors(max_load_more_clicks=50, debug_mode=False):
 
     # Load More butonuna sürekli tıkla
     load_more_count = 0
+    previous_company_count = 0
+    
     while load_more_count < max_load_more_clicks:
         try:
-            # Load More butonunu bul - farklı seçiciler dene
+            # Mevcut firma sayısını kontrol et
+            current_companies = driver.find_elements(By.CSS_SELECTOR, "td.content_company")
+            current_count = len(current_companies)
+            
+            print(f"📊 Şu anda {current_count} firma görünüyor")
+            
+            # Load More butonunu bul
             load_more_button = None
             
-            # Farklı seçiciler dene
+            # Farklı seçiciler ile Load More butonunu ara
             selectors = [
-                "tr.lazymore",
-                "tr[class*='lazymore']",
-                "td:contains('Load more')",
-                "tr:contains('Load more')"
+                "tr.lazymore td",
+                "tr[class*='lazymore'] td", 
+                "td[class*='text-center']:contains('Load more')",
+                "tr:has(td:contains('Load more'))"
             ]
             
+            # XPath ile de dene
+            xpath_selectors = [
+                "//tr[@class='lazymore']//td",
+                "//td[contains(text(), 'Load more')]",
+                "//tr[contains(@class, 'lazymore')]",
+                "//td[contains(text(), 'Load more') or contains(text(), 'load more')]"
+            ]
+            
+            # CSS selectors dene
             for selector in selectors:
                 try:
-                    if "contains" in selector:
-                        load_more_button = driver.find_element(By.XPATH, f"//td[contains(text(), 'Load more')]/..")
-                    else:
-                        load_more_button = driver.find_element(By.CSS_SELECTOR, selector)
-                    if load_more_button:
+                    if ":contains" in selector:
+                        continue  # CSS contains desteklenmiyor, XPath'e geç
+                    load_more_button = driver.find_element(By.CSS_SELECTOR, selector)
+                    if load_more_button and load_more_button.is_displayed():
+                        print(f"✅ Load More butonu bulundu: {selector}")
                         break
                 except:
                     continue
             
+            # XPath selectors dene
             if not load_more_button:
-                print(f"✅ Load More butonu bulunamadı, scraping tamamlandı")
+                for xpath in xpath_selectors:
+                    try:
+                        load_more_button = driver.find_element(By.XPATH, xpath)
+                        if load_more_button and load_more_button.is_displayed():
+                            print(f"✅ Load More butonu bulundu (XPath): {xpath}")
+                            break
+                    except:
+                        continue
+            
+            if not load_more_button:
+                print(f"✅ Load More butonu bulunamadı veya tükendi")
                 break
             
-            # Butona tıkla
-            driver.execute_script("arguments[0].click();", load_more_button)
-            print(f"🔄 Load More butonuna tıklandı ({load_more_count + 1}. kez)")
+            # Sayfanın en altına scroll yap
+            driver.execute_script("arguments[0].scrollIntoView(true);", load_more_button)
+            time.sleep(1)
+            
+            # Butona tıkla - farklı yöntemler dene
+            click_success = False
+            try:
+                # Normal click
+                load_more_button.click()
+                click_success = True
+                print(f"🔄 Load More butonuna tıklandı (normal click) ({load_more_count + 1}. kez)")
+            except:
+                try:
+                    # JavaScript click
+                    driver.execute_script("arguments[0].click();", load_more_button)
+                    click_success = True
+                    print(f"🔄 Load More butonuna tıklandı (JS click) ({load_more_count + 1}. kez)")
+                except:
+                    try:
+                        # ActionChains ile click
+                        from selenium.webdriver.common.action_chains import ActionChains
+                        ActionChains(driver).move_to_element(load_more_button).click().perform()
+                        click_success = True
+                        print(f"🔄 Load More butonuna tıklandı (ActionChains) ({load_more_count + 1}. kez)")
+                    except:
+                        print(f"❌ Load More butonuna tıklanamadı")
+                        break
+            
+            if not click_success:
+                break
             
             # Yeni içeriğin yüklenmesi için bekle
-            time.sleep(4)
+            time.sleep(5)
+            
+            # Yeni firmalar yüklenip yüklenmediğini kontrol et
+            new_companies = driver.find_elements(By.CSS_SELECTOR, "td.content_company")
+            new_count = len(new_companies)
+            
+            if new_count <= current_count:
+                print(f"⚠️ Yeni firma yüklenmedi, bir kez daha deneniyor...")
+                time.sleep(3)
+                # Tekrar kontrol
+                final_companies = driver.find_elements(By.CSS_SELECTOR, "td.content_company")
+                if len(final_companies) <= current_count:
+                    print(f"❌ Yeni firma yüklenemedi, Load More işlemi sonlandırılıyor")
+                    break
+            else:
+                print(f"✅ {new_count - current_count} yeni firma yüklendi")
+            
             load_more_count += 1
+            previous_company_count = new_count
             
         except Exception as e:
-            print(f"✅ Load More işlemi tamamlandı: {e}")
+            print(f"❌ Load More işleminde hata: {e}")
             break
+
+    print(f"🏁 Load More işlemi tamamlandı. Toplam {load_more_count} kez tıklandı")
 
     # Tüm firma linklerini topla
     try:
