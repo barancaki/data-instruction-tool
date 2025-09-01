@@ -16,3 +16,5 @@ ollama run gpt-oss:20b
 
 çalışması için;
 streamlit run 1_Home_Page.py
+
+playwright install chromium

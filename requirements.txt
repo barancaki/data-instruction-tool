@@ -18,3 +18,7 @@ ollama
 lxml
 regex
 aiohttp
+google-generativeai
+certifi
+python-certifi-win32 #windows için
+playwright
