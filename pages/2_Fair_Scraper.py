@@ -3,6 +3,7 @@ from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
+from Scrape.a_sablon import scrape_enosad_proses_all_members,scrape_enosad_fabrika_all_members,scrape_enosad_robotik_all_members,scrape_enosad_sanayi_all_members
 import streamlit as st
 from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
 
@@ -172,5 +173,29 @@ if url in ["https://exhibitors.bauma.de/en/exhibitors-and-products/exhibitors-br
         if st.button("Scan"):
             with st.spinner("Pages are being scanned..."):
                 scrape_bauma_all_exhibitors(int(sayfa_sayisi))
+            st.success("The scan is complete!")
+
+if url in ["https://enosad.org.tr/tr/proses-otomasyonu"]:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_enosad_proses_all_members()
+            st.success("The scan is complete!")
+        
+if url in ["https://enosad.org.tr/tr/fabrika-otomasyonu"]:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_enosad_fabrika_all_members()
+            st.success("The scan is complete!")
+
+if url in ["https://enosad.org.tr/tr/robotik-ve-mekatronik"]:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_enosad_robotik_all_members()
+            st.success("The scan is complete!")
+
+if url in ["https://enosad.org.tr/tr/sanayide-dijital-donusum"]:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_enosad_sanayi_all_members()
             st.success("The scan is complete!")
 st.text('© Baran Çakı 2025')
