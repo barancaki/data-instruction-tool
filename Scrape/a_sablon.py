@@ -372,3 +372,102 @@ def scrape_enosad_sanayi_all_members(base_url="https://enosad.org.tr", start_url
             )
     else:
         print(f"\n🎯 Toplam çekilen üye sayısı: {len(df)}")
+
+def scrape_roboder_all_members(base_url="https://uyeler.roboder.org.tr/", start_url="https://uyeler.roboder.org.tr/"):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.get(start_url)
+    time.sleep(3)
+
+    # 🔄 Load More butonuna basarak tüm kartları yükle
+    while True:
+        try:
+            load_more_btn = driver.find_element(By.CSS_SELECTOR, "div.jet-filters-pagination__link")
+            driver.execute_script("arguments[0].click();", load_more_btn)
+            time.sleep(2)  # Butonun yüklemesi için bekle
+        except:
+            print("Tüm üyeler yüklendi.")
+            break
+
+    # Ana sayfadaki firma kartlarını al
+    member_cards = driver.find_elements(By.CSS_SELECTOR, "div.elementor-widget-container a[href^='https://uyeler.roboder.org.tr/firma/']")
+    member_links = [card.get_attribute("href") for card in member_cards]
+
+    print(f"Toplam {len(member_links)} üye bulundu.")
+
+    tablo = []
+
+    for idx, link in enumerate(member_links, start=1):
+        driver.get(link)
+        time.sleep(2)
+        print(f"{idx}. üye işleniyor: {link}")
+
+        try:
+            firma_adi = driver.find_element(By.CSS_SELECTOR, "h2.elementor-heading-title").text
+        except:
+            firma_adi = " "
+
+        try:
+            site = driver.find_element(By.XPATH, "//span[contains(text(),'.com') or contains(text(),'.net') or contains(text(),'.org')]").text
+        except:
+            site = " "
+
+        try:
+            email = driver.find_element(By.XPATH, "//span[contains(text(),'@')]").text
+        except:
+            email = " "
+
+        try:
+            telefon = driver.find_element(By.XPATH, "//span[contains(text(),'0')]").text
+        except:
+            telefon = " "
+
+        try:
+            adres = driver.find_element(By.XPATH, "//span[contains(text(),'/')]").text
+        except:
+            adres = " "
+
+        tablo.append({
+            "Firma": firma_adi,
+            "Adres": adres,
+            "Telefon": telefon,
+            "E-posta": email,
+            "Web adresi": site
+        })
+
+    driver.quit()
+
+    df = pd.DataFrame(tablo)
+
+    # 📌 SQLite formatında kaydet
+    save_to_sqlite(df)
+
+    # 📌 MySQL uyumlu dump oluştur
+    create_mysql_dump_from_sqlite()
+
+    if st:
+        st.dataframe(df)
+
+        # 📥 DB
+        with open("fuar_data.db", "rb") as f:
+            st.download_button(
+                label="📥 Database (.db) İndir",
+                data=f,
+                file_name="fuar_data.db",
+                mime="application/octet-stream"
+            )
+
+        # 📥 SQL
+        with open("fuar_data.sql", "rb") as f:
+            st.download_button(
+                label="📥 SQL (.sql) İndir",
+                data=f,
+                file_name="fuar_data.sql",
+                mime="application/sql"
+            )
+    else:
+        print(f"\n🎯 Toplam çekilen üye sayısı: {len(df)}")
