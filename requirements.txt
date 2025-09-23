@@ -22,3 +22,4 @@ google-generativeai
 certifi
 python-certifi-win32 #windows için
 playwright
+sentence_transformers
