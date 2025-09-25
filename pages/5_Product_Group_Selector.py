@@ -21,6 +21,14 @@ import subprocess
 import random
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from auth_helper import check_authentication, get_user_info, show_user_info_sidebar
+
+# -------------------------
+# Authentication
+# -------------------------
+check_authentication()
+user_info = get_user_info()
+show_user_info_sidebar()
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
