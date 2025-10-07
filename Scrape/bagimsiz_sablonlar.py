@@ -151,6 +151,7 @@ def scrape_atechfuari():
 
     base_url = "https://atechfuari.com/firmalar/"
     driver.get(base_url)
+    time.sleep(2)  # Sayfanın yüklenmesi için küçük bir bekleme
 
     tablo = []
 
@@ -159,49 +160,38 @@ def scrape_atechfuari():
 
     for firm in firms:
         try:
-            firma_adi = firm.find_element(By.TAG_NAME, "h3").text.strip()
-        except:
+            # Firma adı
+            firma_adi = firm.find_element(By.CSS_SELECTOR, "h3 a").text.strip()
+        except Exception as e:
             firma_adi = " "
 
         try:
-            detay_link = firm.find_element(By.TAG_NAME, "a").get_attribute("href")
+            # Firma web sitesi (btn-secondary linkinden alıyoruz)
+            website = firm.find_element(By.CSS_SELECTOR, "a.btn.btn-sm.btn-secondary").get_attribute("href")
         except:
-            detay_link = None
+            website = ""
 
-        website = " "
-        if detay_link:
-            driver.get(detay_link)
-            time.sleep(1)
+        # Mail bilgisi (websitesine gidip bulmaya çalış)
+        if website:
             try:
-                # Firma web sitesi muhtemelen detay sayfasında a[href^="http"] ile bulunur
-                website = driver.find_element(By.CSS_SELECTOR, "a[href^='http']").get_attribute("href")
+                firma_mail = site_icerisinden_email_bul(website)
+                if firma_mail == "team@packagingfair.com":
+                    firma_mail = "Bu websitesi artık geçerli değildir."
             except:
-                pass
-            if website:
-                    try:
-                    # Mail çekmek için şirketin websitesine otomatik giden program
-                        firma_mail = site_icerisinden_email_bul(website)
-                        if firma_mail == "team@packagingfair.com":
-                            firma_mail = "Bu websitesi artık geçerli değildir."
-                    except:
-                        firma_mail = ""
-            else:   
-                    try:
-                        # Mail çekmek için google üzerinden ilk search şirketin websitesine otomatik giden program
-                            firmanin_url = bing_ilk_link_al(firma_adi)
-                            firma_mail = site_icerisinden_email_bul(firmanin_url)
-                    except:
-                            firma_mail = ""
-
+                firma_mail = ""
+        else:
+            try:
+                # Google/Bing üzerinden firma web sitesi arama fallback
+                firmanin_url = bing_ilk_link_al(firma_adi)
+                firma_mail = site_icerisinden_email_bul(firmanin_url)
+            except:
+                firma_mail = ""
 
         tablo.append({
             "Firma": firma_adi,
             "Web adresi": website,
             "Mail": firma_mail
         })
-
-        # Tekrar ana listeye dön
-        driver.get(base_url)
 
     driver.quit()
 
@@ -215,7 +205,7 @@ def scrape_atechfuari():
 
     if st:
         st.dataframe(df)
-        
+
         # 📥 DB
         with open("fuar_data.db", "rb") as f:
             st.download_button(
@@ -236,3 +226,4 @@ def scrape_atechfuari():
 
     else:
         print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
