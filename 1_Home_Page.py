@@ -23,7 +23,8 @@ def load_config():
         os.getenv('PASSWORD_KULLANICI'),
         os.getenv('PASSWORD_SEFA'),
         os.getenv('PASSWORD_DILARA'),
-        os.getenv('PASSWORD_SERPIL')
+        os.getenv('PASSWORD_SERPIL'),
+        os.getenv('PASSWORD_CIHAN')
     ]
     
     # Şifreleri hash'le
@@ -56,6 +57,11 @@ def load_config():
                     'email': 'serpil@hotmail.com',
                     'name': 'Serpil (Admin)',
                     'password': hashed_passwords[4]
+                },
+                'cihan.hft': {
+                    'email': 'cihan.keser@hf-turkey.com',
+                    'name': 'Cihan (Admin)',
+                    'password': hashed_passwords[5]
                 }
             }
         },
