@@ -1,0 +1,6 @@
+[server]
+headless = true
+address = "0.0.0.0"
+# leave port unset so Docker/Caprover can pass $PORT at runtime
+enableCORS = false
+enableXsrfProtection = false
