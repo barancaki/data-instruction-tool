@@ -57,7 +57,7 @@ Analyze one or more web pages and extract exactly what you need with AI.
 
 ### Engines:
 - **Local (Ollama)** → Model: *gpt-oss:20b* (runs locally)
-- **Google API (Gemini)** → Models: *gemini-1.5-flash* (faster), *gemini-1.5-pro* (more accurate)
+- **Google API (Gemini)** → Models: *gemini-2.5-flash* (faster), *gemini-2.5-pro* (more accurate)
 
 ### Steps:
 1. Enter one or more page URLs (comma-separated).  
@@ -110,7 +110,7 @@ with st.expander("Click to analyze with AI", expanded=True):
         )
         gemini_model = st.selectbox(
             "Gemini Model",
-            options=["gemini-1.5-flash", "gemini-1.5-pro"],
+            options=["gemini-2.5-flash", "gemini-2.5-pro"],
             index=0,
             help="Select 'flash' for speed or 'pro' for accuracy.",
             key="gemini_model",
@@ -174,7 +174,7 @@ with st.expander("Click to analyze with AI", expanded=True):
                         cleaned_texts=cleaned_texts,
                         parse_description=parse_description,
                         api_key=effective_key,
-                        model_name=gemini_model or "gemini-1.5-flash",
+                        model_name=gemini_model or "gemini-2.5-flash",
                     )
 
                 st.success("The analysis is complete!")
@@ -264,7 +264,7 @@ elde edilen **temiz metinleri** aynı sayfada **AI ile analiz etmek**.
             )
             gemini_model_beta = st.selectbox(
                 "Gemini Model (Beta)",
-                options=["gemini-1.5-flash", "gemini-1.5-pro"],
+                options=["gemini-2.5-flash", "gemini-2.5-pro"],
                 index=0,
                 help="Hız için 'flash', doğruluk için 'pro'.",
                 key="aec_gemini_model",
@@ -347,7 +347,7 @@ elde edilen **temiz metinleri** aynı sayfada **AI ile analiz etmek**.
                             cleaned_texts=texts,
                             parse_description=parse_description_beta,
                             api_key=effective_key_beta,
-                            model_name=gemini_model_beta or "gemini-1.5-flash",
+                            model_name=gemini_model_beta or "gemini-2.5-flash",
                         )
                     st.subheader("AI Sonucu (Beta)")
                     st.text_area("AI Answer:", result_beta, height=320)

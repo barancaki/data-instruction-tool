@@ -126,12 +126,12 @@ async def get_clean_texts_from_urls(urls: list[str], insecure_hosts: set[str] | 
 # -------------------------
 # Google Gemini ile AI Parsing
 # -------------------------
-def parse_with_google(cleaned_texts, parse_description, api_key=None, model_name="gemini-1.5-flash"):
+def parse_with_google(cleaned_texts, parse_description, api_key=None, model_name="gemini-2.5-flash"):
     """
     cleaned_texts: fetch edilmiş ve temizlenmiş sayfa metinlerinin listesi
     parse_description: istenen çıkarım promptu (İngilizce önerilir)
     api_key: Google API Key (parametre ile gelmezse ortam değişkenlerinden okunur)
-    model_name: gemini modeli (örn. 'gemini-1.5-flash' veya 'gemini-1.5-pro')
+    model_name: gemini modeli (örn. 'gemini-2.5-flash' veya 'gemini-2.5-pro')
     """
     # API key alma (parametre > env > yoksa hata)
     effective_api_key = api_key or os.getenv("GOOGLE_API_KEY")
