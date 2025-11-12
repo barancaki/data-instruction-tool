@@ -3,6 +3,7 @@ from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
+from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
 from Scrape.a_sablon import scrape_enosad_proses_all_members,scrape_enosad_fabrika_all_members,scrape_enosad_robotik_all_members,scrape_enosad_sanayi_all_members,scrape_roboder_all_members
 import streamlit as st
 from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
@@ -204,4 +205,13 @@ if url in ["https://uyeler.roboder.org.tr/"]:
             with st.spinner("Pages are being scanned..."):
                 scrape_roboder_all_members()
             st.success("The scan is complete!")
+
+if url in ["https://www.innotrans.de/en/visit/exhibitor-directory#/search/f=h-entity_orga;v_sg=0;v_fg=0;v_fpa=FUTURE"]:
+    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
+    if sayfa_sayisi:
+        if st.button("Scan"):
+            with st.spinner("Pages are being scanned..."):
+                scrape_innotrans()
+            st.success("The scan is complete!")
+
 st.text('© Baran Çakı 2025')
