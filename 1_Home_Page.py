@@ -6,36 +6,12 @@ from dotenv import load_dotenv
 # .env dosyasını yükle
 load_dotenv()
 
-# Eğer CapRover veya başka bir platform PORT environment variable ile başlatıyorsa,
-# konteyner loglarında kolay takip için kısa bir çıktı ekleyin.
-if os.getenv('PORT'):
-    print(f"Starting in container environment. PORT={os.getenv('PORT')}")
-
-# Yeni: CapRover / WebSocket troubleshooting bilgisi (sidebar'ta)
-def show_ws_troubleshooting():
-    """Kısa CapRover + WebSocket kontrol listesi."""
-    with st.sidebar.expander("🛠️ WebSocket / CapRover Troubleshooting", expanded=False):
-        st.markdown(
-            "- Ensure your CapRover app has HTTPS enabled (Force HTTPS) if you use a custom domain.\n"
-            "- Make sure CapRover proxies WebSocket traffic (CapRover normally supports websockets).\n"
-            "- In CapRover → App Configs add required env vars (PASSWORD_*, COOKIE_*, PREAUTHORIZED_EMAIL).\n"
-            "- If you added custom Nginx rules, ensure these headers are forwarded:\n"
-            "  proxy_set_header Upgrade $http_upgrade;\n"
-            "  proxy_set_header Connection $connection_upgrade;\n"
-        )
-        st.markdown("Preferred Streamlit launch (use in Docker CMD so CapRover's $PORT is used):")
-        st.code("streamlit run 1_Home_Page.py --server.port ${PORT:-8080} --server.address 0.0.0.0 "
-                "--server.headless true --server.enableCORS false --server.enableXsrfProtection false")
-
 # Sayfa konfigürasyonu
 st.set_page_config(
     page_title="Home Page",
     page_icon="🏠",
     layout="wide"
 )
-
-# Gösterge panelindeki rehberi her çalışmada ekrana koy
-show_ws_troubleshooting()
 
 # Authentication konfigürasyonu
 def load_config():
@@ -58,13 +34,10 @@ def load_config():
     # Eksik olanları tespit et
     missing = [k for k in required_keys if not os.getenv(k)]
     if missing:
-        # Kullanıcıya net bilgi ver ve deploy'da CapRover App Configs'a eklemelerini söyle
         st.error(
             "Eksik environment değişkenleri tespit edildi: "
             f"{', '.join(missing)}\n\n"
-            "CapRover'da uygulamanızın Settings -> App Configs (Environment Variables) bölümüne "
-            "bunları ekleyip tekrar deploy edin. Yerel test için .env kullanıyorsanız, "
-            "üretime .env göndermeyin; CapRover env'lerini kullanın."
+            "Lütfen .env dosyasına bu değişkenleri ekleyin."
         )
         st.stop()
     
@@ -131,22 +104,6 @@ def load_config():
         }
     }
     return config
-
-def show_caprover_guide():
-    """Sidebar'ta CapRover deploy rehberini göster."""
-    guide = """
-    CapRover deployment quick checklist:
-    1) Add Dockerfile, requirements.txt and captain-definition to repo (Dockerfile must run Streamlit on $PORT).
-    2) In CapRover -> Apps -> <app> -> App Configs, add these env vars from your .env:
-       - PASSWORD_ADMIN, PASSWORD_KULLANICI, PASSWORD_SEFA, PASSWORD_DILARA, PASSWORD_SERPIL, PASSWORD_CIHAN
-       - COOKIE_KEY, COOKIE_NAME, COOKIE_EXPIRY_DAYS
-       - PREAUTHORIZED_EMAIL
-    3) Deploy via CapRover (GitHub/CLI or manual). Check build logs for pip errors.
-    4) If deployment fails due to pip dependency errors, relax versions in requirements.txt (remove strict pins) and rebuild.
-    5) Check CapRover -> Logs for runtime errors and ensure port mapping is correct.
-    """
-    with st.sidebar.expander("🚀 CapRover Deployment Guide", expanded=False):
-        st.markdown(guide)
 
 # Ana uygulama
 def main():
@@ -290,9 +247,6 @@ def main():
         **User Name:** {username}  
         **Role:** {'Admin' if username == 'admin' or username == 'serpil.hft' else 'User'}
         ''')
-        
-        # Show CapRover guide in sidebar
-        show_caprover_guide()
         
         st.sidebar.header('🧭 Navigation')
         st.sidebar.success('Use the menu on the left to navigate to other pages.')
