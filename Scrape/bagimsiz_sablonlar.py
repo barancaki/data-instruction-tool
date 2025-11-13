@@ -1,3 +1,4 @@
+import io
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -226,4 +227,280 @@ def scrape_atechfuari():
 
     else:
         print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+def scrape_hvacr_world(sayfa_sayisi):
+    """
+    HVACR World 2025 fuarı katılımcı listesini çeker
+    """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://exhibitors.hvacr-world.com/hvacr-world-2025/Exhibitor"
+    tablo = []
+
+    try:
+        # İlk sayfayı yükle
+        print(f"🔄 Ana sayfa yükleniyor...")
+        driver.get(base_url)
+        time.sleep(3)
+
+        for page_num in range(1, sayfa_sayisi + 1):
+            print(f"\n🔄 {page_num}. sayfa işleniyor...")
+
+            try:
+                # Firma kartlarını bul
+                firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.card.h-100")
+                
+                if not firma_kartlari:
+                    print(f"⚠️ {page_num}. sayfada firma bulunamadı.")
+                    break
+
+                print(f"📊 {len(firma_kartlari)} firma bulundu")
+
+                # Firma linklerini topla (detaya gitmeden önce)
+                firma_linkleri = []
+                for kart in firma_kartlari:
+                    try:
+                        detay_link = kart.find_element(By.CSS_SELECTOR, "h5.card-title a").get_attribute("href")
+                        if detay_link:
+                            firma_linkleri.append(detay_link)
+                    except:
+                        continue
+
+                print(f"🔗 {len(firma_linkleri)} firma linki toplandı")
+
+                # Her firma linkine git
+                for idx, detay_link in enumerate(firma_linkleri, 1):
+                    try:
+                        # Detay sayfasına git
+                        print(f"  {idx}/{len(firma_linkleri)}. 🔍 Detay sayfası açılıyor...")
+                        driver.get(detay_link)
+                        time.sleep(2)
+
+                        # Firma adı
+                        try:
+                            firma_adi = driver.find_element(By.CSS_SELECTOR, "h1.company-title").text.strip()
+                        except:
+                            firma_adi = ""
+
+                        # Stand numarası
+                        try:
+                            stand_elements = driver.find_elements(By.CSS_SELECTOR, "h6")
+                            stand_no = ""
+                            for elem in stand_elements:
+                                text = elem.text.strip()
+                                if "Stand No" in text:
+                                    stand_no = text
+                                    break
+                        except:
+                            stand_no = ""
+
+                        # Ülke
+                        try:
+                            h6_elements = driver.find_elements(By.CSS_SELECTOR, "h6")
+                            ulke = ""
+                            for i, elem in enumerate(h6_elements):
+                                text = elem.text.strip()
+                                if "Stand No" in text and i + 1 < len(h6_elements):
+                                    ulke = h6_elements[i + 1].text.strip()
+                                    break
+                            if not ulke and len(h6_elements) > 1:
+                                ulke = h6_elements[1].text.strip()
+                        except:
+                            ulke = ""
+
+                        # Kategori/Sektör
+                        try:
+                            kategori_elem = driver.find_element(By.CSS_SELECTOR, "span.badge.bg-secondary")
+                            kategori = kategori_elem.text.strip()
+                        except:
+                            kategori = ""
+
+                        # İletişim bilgileri
+                        telefon, email, website, adres = "", "", "", ""
+                        
+                        try:
+                            bilgi_elemanlari = driver.find_elements(By.CSS_SELECTOR, "div.company-info div.col-md-12, div.company-info div[class*='col-md']")
+                            
+                            for elem in bilgi_elemanlari:
+                                try:
+                                    icon_html = elem.get_attribute("innerHTML")
+                                    text = elem.text.strip()
+                                    
+                                    # Website
+                                    if "fa-globe" in icon_html:
+                                        try:
+                                            website_link = elem.find_element(By.TAG_NAME, "a")
+                                            website = website_link.get_attribute("href")
+                                            if not website:
+                                                website = website_link.text.strip()
+                                        except:
+                                            website = text.replace("🌐", "").strip()
+                                    
+                                    # Email
+                                    elif "fa-envelope" in icon_html:
+                                        try:
+                                            email_link = elem.find_element(By.CSS_SELECTOR, "a[href^='mailto:']")
+                                            email = email_link.get_attribute("href").replace("mailto:", "")
+                                        except:
+                                            if "Send Enquiry" not in text:
+                                                email = text.replace("📧", "").strip()
+                                    
+                                    # Telefon
+                                    elif "fa-phone" in icon_html:
+                                        telefon = text.replace("📞", "").strip()
+                                    
+                                    # Adres
+                                    elif "fa-location-dot" in icon_html or "fa-map-marker" in icon_html:
+                                        adres = text.replace("📍", "").strip()
+                                        
+                                except:
+                                    continue
+                        except:
+                            pass
+
+                        # Sosyal medya linkleri
+                        facebook, linkedin, instagram, youtube = "", "", "", ""
+                        
+                        try:
+                            sosyal_links = driver.find_elements(By.CSS_SELECTOR, "div.social-links a")
+                            
+                            for link in sosyal_links:
+                                href = link.get_attribute("href")
+                                
+                                if href:
+                                    if "facebook.com" in href:
+                                        facebook = href
+                                    elif "linkedin.com" in href:
+                                        linkedin = href
+                                    elif "instagram.com" in href:
+                                        instagram = href
+                                    elif "youtube.com" in href:
+                                        youtube = href
+                        except:
+                            pass
+
+                        # Email bulunamadıysa sadece website içinden ara
+                        if not email and website:
+                            try:
+                                print(f"     🔎 Website'den email aranıyor...")
+                                firma_mail = site_icerisinden_email_bul(website)
+                                if firma_mail and "packagingfair.com" not in firma_mail:
+                                    email = firma_mail
+                            except:
+                                pass
+
+                        print(f"  ✅ {firma_adi} - {ulke}")
+
+                        # Verileri tabloya ekle
+                        tablo.append({
+                            "Firma Adı": firma_adi,
+                            "Ülke": ulke.upper() if ulke else "",
+                            "Stand No": stand_no,
+                            "Kategori": kategori,
+                            "Telefon": telefon,
+                            "Email": email,
+                            "Adres": adres,
+                            "Web Sitesi": website,
+                            "Facebook": facebook,
+                            "LinkedIn": linkedin,
+                            "Instagram": instagram,
+                            "YouTube": youtube,
+                            "Detay Link": detay_link
+                        })
+
+                    except Exception as e:
+                        print(f"  ❌ Firma detayı işlenirken hata: {e}")
+                        continue
+
+                # Bir sonraki sayfaya geç (son sayfa değilse)
+                if page_num < sayfa_sayisi:
+                    print(f"\n⏭️ {page_num + 1}. sayfaya geçiliyor...")
+                    
+                    # Liste sayfasına geri dön
+                    driver.get(base_url)
+                    time.sleep(2)
+                    
+                    # Pagination butonunu bul ve tıkla
+                    try:
+                        # Sayfa numarasına göre offset hesapla
+                        offset = page_num * 24
+                        
+                        # JavaScript ile pagination fonksiyonunu çağır
+                        driver.execute_script(f"searchFilter({offset});")
+                        time.sleep(3)
+                        
+                        print(f"✅ {page_num + 1}. sayfa yüklendi")
+                    except Exception as e:
+                        print(f"⚠️ Sayfa değiştirme hatası: {e}")
+                        # Alternatif yöntem: Doğrudan URL ile
+                        try:
+                            driver.get(f"{base_url}?offset={offset}")
+                            time.sleep(3)
+                        except:
+                            print(f"❌ {page_num + 1}. sayfaya geçilemedi")
+                            break
+
+            except Exception as e:
+                print(f"❌ Sayfa {page_num} işlenirken hata: {e}")
+                break
+
+    finally:
+        driver.quit()
+
+    # DataFrame oluştur
+    df = pd.DataFrame(tablo)
+    
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # Streamlit gösterimi
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Excel (.xlsx) İndir",
+            data=excel_buffer,
+            file_name="hvacr_world_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name="hvacr_world_data.csv",
+            mime="text/csv"
+        )
+
+        # Ülkelere göre dağılım grafiği
+        if not df.empty:
+            ulke_sayilari = df["Ülke"].value_counts().reset_index()
+            ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+            fig = px.bar(ulke_sayilari.head(20), x="Ülke", y="Firma Sayısı", 
+                         title="Ülkelere Göre Firma Dağılımı - HVACR World 2025")
+            st.plotly_chart(fig)
+            
+            # Kategori dağılımı
+            if "Kategori" in df.columns and not df["Kategori"].isna().all():
+                kategori_dagilim = df[df["Kategori"] != ""]["Kategori"].value_counts().reset_index()
+                kategori_dagilim.columns = ["Kategori", "Sayı"]
+                fig2 = px.pie(kategori_dagilim, values="Sayı", names="Kategori",
+                              title="Kategori Dağılımı")
+                st.plotly_chart(fig2)
+    else:
+        print(f"\n📊 İstatistikler:")
+        if not df.empty:
+            print(df["Ülke"].value_counts())
+        
+    return df
