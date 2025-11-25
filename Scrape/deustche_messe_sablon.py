@@ -95,11 +95,17 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
                     email = ""
 
                 tablo.append({
-                    "Firma": firma_adi,
-                    "Ülke": ulke,
-                    "Adres": adres,
-                    "Telefon": telefon,
-                    "Company Mail": email
+                    "Data Source/E_Exhibition": "WIN Eurasia",
+                    "Product": "",
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": "",
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": telefon,
+                    "CompanyAddress": adres,
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": ulke
                 })
 
                 print(f"✅ {firma_adi} eklendi.")
@@ -139,7 +145,7 @@ def scrape_win_eurasia_all_pages(url, sayfa_sayisi):
                 mime="application/sql"
             )
 
-        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
         ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
         fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
         st.plotly_chart(fig)
@@ -224,11 +230,17 @@ def scrape_how_all_pages(url, sayfa_sayisi):
                     email = ""
 
                 tablo.append({
-                    "Firma": firma_adi,
-                    "Ülke": ulke,
-                    "Adres": adres,
-                    "Telefon": telefon,
-                    "Company Mail": email
+                    "Data Source/E_Exhibition": "Hub of Warehouse",
+                    "Product": "",
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": "",
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": telefon,
+                    "CompanyAddress": adres,
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": ulke
                 })
 
                 print(f"✅ {firma_adi} eklendi.")
@@ -268,7 +280,7 @@ def scrape_how_all_pages(url, sayfa_sayisi):
                 mime="application/sql"
             )
 
-        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
         ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
         fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
         st.plotly_chart(fig)
@@ -353,11 +365,17 @@ def scrape_sodex_all_pages(url, sayfa_sayisi):
                     email = ""
 
                 tablo.append({
-                    "Firma": firma_adi,
-                    "Ülke": ulke,
-                    "Adres": adres,
-                    "Telefon": telefon,
-                    "Company Mail": email
+                    "Data Source/E_Exhibition": "SODEX",
+                    "Product": "",
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": "",
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": telefon,
+                    "CompanyAddress": adres,
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": ulke
                 })
 
                 print(f"✅ {firma_adi} eklendi.")
@@ -397,7 +415,7 @@ def scrape_sodex_all_pages(url, sayfa_sayisi):
                 mime="application/sql"
             )
 
-        ulke_sayilari = df["Ülke"].value_counts().reset_index()
+        ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
         ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
         fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
         st.plotly_chart(fig)
@@ -478,10 +496,17 @@ def scrape_automechanika_all_pages(sayfa_sayisi):
                     website = ""
 
                 tablo.append({
-                    "Firma": firma_adi or "",
-                    "Ülke": ulke or "",
-                    "Adres": adres or "",
-                    "Website": website or ""
+                    "Data Source/E_Exhibition": "Automechanika Istanbul",
+                    "Product": "",
+                    "CompanyName": firma_adi or "",
+                    "CompanyWebsite": website or "",
+                    "CompanyMail": "",
+                    "CompanyMail2": "",
+                    "CompanyPhone": "",
+                    "CompanyAddress": adres or "",
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": ulke or ""
                 })
 
                 print(f"✅ {firma_adi} eklendi.")
@@ -504,8 +529,12 @@ def scrape_automechanika_all_pages(sayfa_sayisi):
     df.columns = [str(col).strip().replace(" ", "_") for col in df.columns]
 
     # Eksik kolon varsa ekle
-    for col in ["Firma", "Ülke", "Adres", "Website"]:
-        if col not in df.columns:
+    required_cols = ["Data Source/E_Exhibition", "Product", "CompanyName", "CompanyWebsite", 
+                     "CompanyMail", "CompanyMail2", "CompanyPhone", "CompanyAddress", 
+                     "CompanyZipCode", "CompanyCity", "CompanyCountry"]
+    for col in required_cols:
+        col_name = col.replace("/", "_").replace(" ", "_")
+        if col not in df.columns and col_name not in df.columns:
             df[col] = ""
 
     # NaN'leri boş string yap
@@ -538,9 +567,10 @@ def scrape_automechanika_all_pages(sayfa_sayisi):
                 mime="application/sql"
             )
 
-        ulke_sayilari = df["Ülke"].value_counts().reset_index()
-        ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
-        fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
-        st.plotly_chart(fig)
+        if "CompanyCountry" in df.columns:
+            ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
+            ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+            fig = px.bar(ulke_sayilari, x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
+            st.plotly_chart(fig)
     else:
         print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
