@@ -155,11 +155,17 @@ def scrape_enosad_fabrika_all_members(base_url="https://enosad.org.tr", start_ur
             site = " "
 
         tablo.append({
-            "Firma": firma_adi,
-            "Adres": adres,
-            "Telefon": telefon,
-            "E-posta": email,
-            "Web adresi": site
+            "Data Source/E_Exhibition": "ENOSAD Fabrika Otomasyonu",
+            "Product": "",
+            "CompanyName": firma_adi,
+            "CompanyWebsite": site,
+            "CompanyMail": email,
+            "CompanyMail2": "",
+            "CompanyPhone": telefon,
+            "CompanyAddress": adres,
+            "CompanyZipCode": "",
+            "CompanyCity": "",
+            "CompanyCountry": ""
         })
 
     driver.quit()
@@ -244,11 +250,17 @@ def scrape_enosad_robotik_all_members(base_url="https://enosad.org.tr", start_ur
             site = " "
 
         tablo.append({
-            "Firma": firma_adi,
-            "Adres": adres,
-            "Telefon": telefon,
-            "E-posta": email,
-            "Web adresi": site
+            "Data Source/E_Exhibition": "ENOSAD Robotik ve Mekatronik",
+            "Product": "",
+            "CompanyName": firma_adi,
+            "CompanyWebsite": site,
+            "CompanyMail": email,
+            "CompanyMail2": "",
+            "CompanyPhone": telefon,
+            "CompanyAddress": adres,
+            "CompanyZipCode": "",
+            "CompanyCity": "",
+            "CompanyCountry": ""
         })
 
     driver.quit()
@@ -333,11 +345,17 @@ def scrape_enosad_sanayi_all_members(base_url="https://enosad.org.tr", start_url
             site = " "
 
         tablo.append({
-            "Firma": firma_adi,
-            "Adres": adres,
-            "Telefon": telefon,
-            "E-posta": email,
-            "Web adresi": site
+            "Data Source/E_Exhibition": "ENOSAD Sanayide Dijital Dönüşüm",
+            "Product": "",
+            "CompanyName": firma_adi,
+            "CompanyWebsite": site,
+            "CompanyMail": email,
+            "CompanyMail2": "",
+            "CompanyPhone": telefon,
+            "CompanyAddress": adres,
+            "CompanyZipCode": "",
+            "CompanyCity": "",
+            "CompanyCountry": ""
         })
 
     driver.quit()
@@ -432,11 +450,17 @@ def scrape_roboder_all_members(base_url="https://uyeler.roboder.org.tr/", start_
             adres = " "
 
         tablo.append({
-            "Firma": firma_adi,
-            "Adres": adres,
-            "Telefon": telefon,
-            "E-posta": email,
-            "Web adresi": site
+            "Data Source/E_Exhibition": "ROBODER",
+            "Product": "",
+            "CompanyName": firma_adi,
+            "CompanyWebsite": site,
+            "CompanyMail": email,
+            "CompanyMail2": "",
+            "CompanyPhone": telefon,
+            "CompanyAddress": adres,
+            "CompanyZipCode": "",
+            "CompanyCity": "",
+            "CompanyCountry": ""
         })
 
     driver.quit()

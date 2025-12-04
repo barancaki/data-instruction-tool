@@ -103,10 +103,17 @@ def scrape_evchargeshow():
                 website = " "
 
             tablo.append({
-                "Firma": firma_adi,
-                "Ülke": ulke,
-                "Web adresi": website,
-                "Mail": firma_mail
+                "Data Source/E_Exhibition": "EV Charge Show",
+                "Product": "",
+                "CompanyName": firma_adi,
+                "CompanyWebsite": website,
+                "CompanyMail": firma_mail if isinstance(firma_mail, str) else (firma_mail[0] if firma_mail else ""),
+                "CompanyMail2": "",
+                "CompanyPhone": "",
+                "CompanyAddress": "",
+                "CompanyZipCode": "",
+                "CompanyCity": "",
+                "CompanyCountry": ulke
             })
 
     except Exception as e:
@@ -189,9 +196,17 @@ def scrape_atechfuari():
                 firma_mail = ""
 
         tablo.append({
-            "Firma": firma_adi,
-            "Web adresi": website,
-            "Mail": firma_mail
+            "Data Source/E_Exhibition": "ATECH Fuarı",
+            "Product": "",
+            "CompanyName": firma_adi,
+            "CompanyWebsite": website,
+            "CompanyMail": firma_mail if isinstance(firma_mail, str) else (firma_mail[0] if firma_mail else ""),
+            "CompanyMail2": "",
+            "CompanyPhone": "",
+            "CompanyAddress": "",
+            "CompanyZipCode": "",
+            "CompanyCity": "",
+            "CompanyCountry": ""
         })
 
     driver.quit()
@@ -399,14 +414,18 @@ def scrape_hvacr_world(sayfa_sayisi):
 
                         # Verileri tabloya ekle
                         tablo.append({
-                            "Firma Adı": firma_adi,
-                            "Ülke": ulke.upper() if ulke else "",
+                            "Data Source/E_Exhibition": "HVACR World 2025",
+                            "Product": kategori,
+                            "CompanyName": firma_adi,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email,
+                            "CompanyMail2": "",
+                            "CompanyPhone": telefon,
+                            "CompanyAddress": adres,
+                            "CompanyZipCode": "",
+                            "CompanyCity": "",
+                            "CompanyCountry": ulke.upper() if ulke else "",
                             "Stand No": stand_no,
-                            "Kategori": kategori,
-                            "Telefon": telefon,
-                            "Email": email,
-                            "Adres": adres,
-                            "Web Sitesi": website,
                             "Facebook": facebook,
                             "LinkedIn": linkedin,
                             "Instagram": instagram,
@@ -485,15 +504,15 @@ def scrape_hvacr_world(sayfa_sayisi):
 
         # Ülkelere göre dağılım grafiği
         if not df.empty:
-            ulke_sayilari = df["Ülke"].value_counts().reset_index()
+            ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
             ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
             fig = px.bar(ulke_sayilari.head(20), x="Ülke", y="Firma Sayısı", 
                          title="Ülkelere Göre Firma Dağılımı - HVACR World 2025")
             st.plotly_chart(fig)
             
             # Kategori dağılımı
-            if "Kategori" in df.columns and not df["Kategori"].isna().all():
-                kategori_dagilim = df[df["Kategori"] != ""]["Kategori"].value_counts().reset_index()
+            if "Product" in df.columns and not df["Product"].isna().all():
+                kategori_dagilim = df[df["Product"] != ""]["Product"].value_counts().reset_index()
                 kategori_dagilim.columns = ["Kategori", "Sayı"]
                 fig2 = px.pie(kategori_dagilim, values="Sayı", names="Kategori",
                               title="Kategori Dağılımı")
@@ -501,6 +520,6 @@ def scrape_hvacr_world(sayfa_sayisi):
     else:
         print(f"\n📊 İstatistikler:")
         if not df.empty:
-            print(df["Ülke"].value_counts())
+            print(df["CompanyCountry"].value_counts())
         
     return df

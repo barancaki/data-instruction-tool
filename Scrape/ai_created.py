@@ -108,14 +108,29 @@ def scrape_advanced_engineering(sayfa_sayisi):
                                             break
                             except:
                                 pass
+                        
+                        # Ürün Grupları
+                        urun_gruplari = ""
+                        try:
+                            urun_div_list = driver.find_elements(By.CSS_SELECTOR, "div.stand-details__info-line-content div.stand-details__category-pill")
+                            urun_gruplari = ", ".join([div.text.strip() for div in urun_div_list if div.text.strip()])
+                        except:
+                            urun_gruplari = ""
 
                         print(f"  ✅ {firma_adi}")
 
                         tablo.append({
-                            "Firma Adı": firma_adi,
-                            "Email": email,
-                            "Adres": adres,
-                            "Web Sitesi": website,
+                            "Data Source/E_Exhibition": "Advanced Engineering UK",
+                            "Product": urun_gruplari,
+                            "CompanyName": firma_adi,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email,
+                            "CompanyMail2": "",
+                            "CompanyPhone": "",
+                            "CompanyAddress": adres,
+                            "CompanyZipCode": "",
+                            "CompanyCity": "",
+                            "CompanyCountry": "",
                             "Detay Link": detay_link
                         })
 
@@ -265,13 +280,28 @@ def scrape_mesago(sayfa_sayisi):
                             except:
                                 pass
                         
+                        # Ürün Grupları (Keywords)
+                        urun_gruplari = ""
+                        try:
+                            urun_li_list = driver.find_elements(By.CSS_SELECTOR, "div.ex-keyword-list__container ul li.ex-keyword-list__keyword")
+                            urun_gruplari = ", ".join([li.text.strip() for li in urun_li_list if li.text.strip()])
+                        except:
+                            urun_gruplari = ""
+                        
                         print(f"  ✅ {firma_adi}")
 
                         tablo.append({
-                            "Firma Adı": firma_adi,
-                            "Telefon": telefon,
-                            "Email": email,
-                            "Web Sitesi": website,
+                            "Data Source/E_Exhibition": "SPS Mesago",
+                            "Product": urun_gruplari,
+                            "CompanyName": firma_adi,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email,
+                            "CompanyMail2": "",
+                            "CompanyPhone": telefon,
+                            "CompanyAddress": "",
+                            "CompanyZipCode": "",
+                            "CompanyCity": "",
+                            "CompanyCountry": "",
                             "Detay Link": detay_link
                         })
 
@@ -448,12 +478,18 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
                     print(f"  ✅ {firma_adi} - {ulke}")
 
                     tablo.append({
-                        "Firma Adı": firma_adi,
+                        "Data Source/E_Exhibition": "GITEX Africa Morocco",
+                        "Product": urun_gruplari,
+                        "CompanyName": firma_adi,
+                        "CompanyWebsite": website,
+                        "CompanyMail": email,
+                        "CompanyMail2": "",
+                        "CompanyPhone": "",
+                        "CompanyAddress": "",
+                        "CompanyZipCode": "",
+                        "CompanyCity": "",
+                        "CompanyCountry": ulke.upper() if ulke else "",
                         "Stand No": stand_no,
-                        "Ülke": ulke.upper() if ulke else "",
-                        "Email": email,
-                        "Web Sitesi": website,
-                        "Ürün Grupları": urun_gruplari,
                         "Detay Link": detay_link
                     })
 
@@ -495,8 +531,8 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
         # Grafikler
         if not df.empty:
             try:
-                if "Ülke" in df.columns:
-                    ulke_sayilari = df["Ülke"].value_counts().reset_index()
+                if "CompanyCountry" in df.columns:
+                    ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
                     ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
                     fig = px.bar(ulke_sayilari.head(20), x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
                     st.plotly_chart(fig)
@@ -504,8 +540,8 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
                 st.error(f"Grafik çizilirken hata: {e}")
     else:
         print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
-        if not df.empty and "Ülke" in df.columns:
-            print(df["Ülke"].value_counts())
+        if not df.empty and "CompanyCountry" in df.columns:
+            print(df["CompanyCountry"].value_counts())
             
     return df
 

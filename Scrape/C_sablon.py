@@ -57,9 +57,17 @@ def scrape_kalitefuari():
                 firma_mail = ""
 
             tablo.append({
-                "Firma": firma_adi,
-                "Web adresi": website,
-                "Mail": firma_mail
+                "Data Source/E_Exhibition": "Kalite Fuarı",
+                "Product": "",
+                "CompanyName": firma_adi,
+                "CompanyWebsite": website,
+                "CompanyMail": firma_mail if isinstance(firma_mail, str) else (firma_mail[0] if firma_mail else ""),
+                "CompanyMail2": "",
+                "CompanyPhone": "",
+                "CompanyAddress": "",
+                "CompanyZipCode": "",
+                "CompanyCity": "",
+                "CompanyCountry": ""
             })
             time.sleep(0.5)  # sayfanın yavaşlamasını önlemek için
 
@@ -141,9 +149,17 @@ def scrape_mobisadimex():
                     firma_mail = ""
 
                 tablo.append({
-                    "Firma": firma_adi,
-                    "Web adresi": website,
-                    "Mail": firma_mail
+                    "Data Source/E_Exhibition": "Mobisad IMEX",
+                    "Product": "",
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": website,
+                    "CompanyMail": firma_mail if isinstance(firma_mail, str) else (firma_mail[0] if firma_mail else ""),
+                    "CompanyMail2": "",
+                    "CompanyPhone": "",
+                    "CompanyAddress": "",
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": ""
                 })
 
                 time.sleep(0.5)
