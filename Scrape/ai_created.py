@@ -362,7 +362,7 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
-    base_url = "https://exhibitors.gitexafrica.com/gitex-africa-2025/Exhibitor"
+    base_url = "https://exhibitors-dwtc.exhibitoronlinemanual.com/gitex-africa-2025/Exhibitor"
     tablo = []
 
     try:
@@ -402,7 +402,7 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
                     if detay_link:
                         # Eğer relative URL ise, base URL ile birleştir
                         if detay_link.startswith("/"):
-                            detay_link = "https://exhibitors.gitexafrica.com" + detay_link
+                            detay_link = "https://exhibitors-dwtc.exhibitoronlinemanual.com" + detay_link
                         # Sadece ExbDetails içeren linkleri al (harita linklerini filtrele)
                         if "ExbDetails" in detay_link:
                             firma_linkleri.append(detay_link)
@@ -422,12 +422,16 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
                     try:
                         firma_adi = driver.find_element(By.CSS_SELECTOR, "h4.group.card-title.inner.list-group-item-heading").text.strip()
                     except:
-                        firma_adi = ""
+                        try:
+                            firma_adi = driver.find_element(By.TAG_NAME, "h4").text.strip()
+                        except:
+                            firma_adi = ""
 
                     # Stand No
                     stand_no = ""
                     try:
-                        p_elements = driver.find_elements(By.CSS_SELECTOR, "p[style*='margin-bottom:0']")
+                        # Sayfadaki tüm metinleri kontrol edip Stand No içeren satırı bulalım
+                        p_elements = driver.find_elements(By.CSS_SELECTOR, "p")
                         for p_elem in p_elements:
                             text = p_elem.text.strip()
                             if "Stand No" in text:
@@ -439,6 +443,7 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
                     # Ülke
                     ulke = ""
                     try:
+                        # Eski yöntem: span[style*='float:left']
                         span_elem = driver.find_element(By.CSS_SELECTOR, "span[style*='float:left']")
                         ulke = span_elem.text.strip()
                     except:
@@ -447,8 +452,17 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
                     # Website
                     website = ""
                     try:
-                        website_elem = driver.find_element(By.CSS_SELECTOR, "li.social_website a")
-                        website = website_elem.get_attribute("href")
+                        # Önce sosyal linklerden bak
+                        try:
+                            website_elem = driver.find_element(By.CSS_SELECTOR, "li.social_website a")
+                            website = website_elem.get_attribute("href")
+                        except:
+                            # Bulamazsa genel linklerde "VISIT WEBSITE" ara
+                            links = driver.find_elements(By.TAG_NAME, "a")
+                            for link in links:
+                                if "VISIT WEBSITE" in link.text.upper():
+                                    website = link.get_attribute("href")
+                                    break
                     except:
                         website = ""
 
