@@ -1,0 +1,534 @@
+# 🚀 HyperScrape Engine v2 - Implementation Plan
+
+Mevcut Fair Scraper sisteminin tamamen yeniden tasarlanmış, modüler ve yüksek performanslı versiyonu.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Proje İsmi**: "HyperScrape" olarak öneriyorum. Alternatifler: "ScrapeMaster", "FairHunter", "DataHarvest"
+> 
+> Bu isimlerden birini onaylayın veya başka bir isim önerin.
+
+> [!WARNING]
+> **API Anahtarları**: Google Places API gibi ücretli servisler opsiyonel olacak. Şimdilik ücretsiz alternatifler (OpenStreetMap/Nominatim) kullanılacak.
+
+---
+
+## Proposed Changes
+
+### HyperScrape Core Module
+
+Yeni klasör yapısı ve temel mimari bileşenler.
+
+#### [NEW] [HyperScrape/](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape)
+
+```
+HyperScrape/
+├── __init__.py
+├── config/
+│   ├── __init__.py
+│   ├── fairs.yaml          # Site tanımları
+│   └── settings.py         # Global ayarlar
+├── core/
+│   ├── __init__.py
+│   ├── engine.py           # Ana ScraperEngine sınıfı
+│   ├── driver_pool.py      # Selenium driver yönetimi
+│   └── cache.py            # Caching sistemi
+├── templates/
+│   ├── __init__.py
+│   ├── base.py             # BaseTemplate abstract class
+│   ├── tuyap.py            # Tuyap siteler için template
+│   ├── deutsche_messe.py   # Deutsche Messe siteler için
+│   ├── modal.py            # Modal popup siteler için
+│   └── card.py             # Card-based siteler için
+├── enrichment/
+│   ├── __init__.py
+│   ├── email_finder.py     # Gelişmiş email bulma
+│   ├── address_finder.py   # Adres bulma
+│   └── social_finder.py    # Sosyal medya linkleri
+├── utils/
+│   ├── __init__.py
+│   ├── logging.py          # Structured logging
+│   ├── retry.py            # Retry mekanizması
+│   └── validators.py       # Veri doğrulama
+└── models/
+    ├── __init__.py
+    ├── fair.py             # Fair/Company data models
+    └── result.py           # Scrape sonuç modelleri
+```
+
+---
+
+#### [NEW] [__init__.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/__init__.py)
+
+Paket başlatma ve public API tanımları.
+
+---
+
+#### [NEW] [config/fairs.yaml](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/config/fairs.yaml)
+
+Tüm fuar sitelerinin konfigürasyonları:
+- URL pattern'ları
+- CSS selector'lar
+- Template tipi
+- Sayfalama mantığı
+- Özel ayarlar
+
+```yaml
+replast_eurasia:
+  name: "Replast Eurasia"
+  base_url: "https://replasteurasia.com"
+  pagination: "/katilimci-listesi?page={page}"
+  template: "tuyap"
+  selectors:
+    company_list: ".filter-list__item"
+    company_name: ".table-block-content:nth-of-type(1)"
+    address: ".table-block-content:nth-of-type(2)"
+    phone: "a[href^='tel:']"
+    website: "a[href^='http']"
+    detail_button: ".js-open-table-detail"
+    product_groups: ".table-detail-wrapper__list-item"
+
+win_eurasia:
+  name: "WIN Eurasia"
+  base_url: "https://platform.win-eurasia.com"
+  pagination: "/participants?page={page}"
+  template: "deutsche_messe"
+  selectors:
+    company_card: "div.cell.small-12"
+    detail_link: "a.o.link.as-block.fx.dropshadow.for-child"
+    company_name: ".search-snippet-name"
+    country: ".search-snippet-description"
+    address: "ul.t.set-250-regular.as-copy li"
+    email: "a[href^='mailto:']"
+# ... 20+ more fairs
+```
+
+---
+
+#### [NEW] [core/engine.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/core/engine.py)
+
+Ana scraping engine:
+
+```python
+class HyperScrapeEngine:
+    """
+    Template Pattern ile jenerik scraping engine.
+    """
+    def __init__(self, fair_config: FairConfig):
+        self.config = fair_config
+        self.driver_pool = DriverPool()
+        self.cache = ScrapeCache()
+        self.logger = get_logger(__name__)
+    
+    async def scrape_all(self, page_count: int = None) -> ScrapeResult:
+        """Ana scraping metodu - paralel işleme ile."""
+        template = self._get_template()
+        pages = self._get_page_urls(page_count)
+        
+        # Paralel sayfa scraping
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(template.scrape_page(url)) for url in pages]
+        
+        results = [t.result() for t in tasks]
+        return self._merge_results(results)
+    
+    def _get_template(self) -> BaseTemplate:
+        """Config'e göre uygun template'i döndürür."""
+        templates = {
+            'tuyap': TuyapTemplate,
+            'deutsche_messe': DeutscheMesseTemplate,
+            'modal': ModalTemplate,
+            'card': CardTemplate,
+        }
+        return templates[self.config.template](self.config, self.driver_pool)
+```
+
+---
+
+#### [NEW] [core/driver_pool.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/core/driver_pool.py)
+
+Selenium driver pooling:
+
+```python
+class DriverPool:
+    """
+    Selenium WebDriver pool - driver reuse ile performans artışı.
+    """
+    def __init__(self, pool_size: int = 3):
+        self.pool_size = pool_size
+        self._drivers: Queue = Queue()
+        self._lock = threading.Lock()
+    
+    def get_driver(self) -> webdriver.Chrome:
+        """Pool'dan driver al veya yeni oluştur."""
+        ...
+    
+    def return_driver(self, driver: webdriver.Chrome):
+        """Driver'ı pool'a geri koy."""
+        ...
+```
+
+---
+
+#### [NEW] [templates/base.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/templates/base.py)
+
+Abstract base template:
+
+```python
+from abc import ABC, abstractmethod
+
+class BaseTemplate(ABC):
+    """
+    Tüm scraper template'lerinin base sınıfı.
+    Template Method Pattern implementasyonu.
+    """
+    def __init__(self, config: FairConfig, driver_pool: DriverPool):
+        self.config = config
+        self.driver_pool = driver_pool
+        self.enricher = DataEnricher()
+    
+    async def scrape_page(self, url: str) -> List[Company]:
+        """Template method - scraping akışı."""
+        driver = self.driver_pool.get_driver()
+        try:
+            await self._load_page(driver, url)
+            companies = await self._extract_companies(driver)
+            enriched = await self._enrich_data(companies)
+            return enriched
+        finally:
+            self.driver_pool.return_driver(driver)
+    
+    @abstractmethod
+    async def _extract_companies(self, driver) -> List[Company]:
+        """Her template kendi extraction mantığını implement eder."""
+        pass
+    
+    async def _enrich_data(self, companies: List[Company]) -> List[Company]:
+        """Veri zenginleştirme - email, adres, sosyal medya."""
+        tasks = [self.enricher.enrich(c) for c in companies]
+        return await asyncio.gather(*tasks)
+```
+
+---
+
+#### [NEW] [templates/tuyap.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/templates/tuyap.py)
+
+Tuyap-style siteler için template (replast, burtarim, pencere, smtech, iplik, maktek):
+
+```python
+class TuyapTemplate(BaseTemplate):
+    """
+    .filter-list__item bazlı siteler için template.
+    Desteklenen siteler: replast, burtarim, pencere, smtech, iplik, maktek...
+    """
+    async def _extract_companies(self, driver) -> List[Company]:
+        items = driver.find_elements(By.CSS_SELECTOR, self.config.selectors['company_list'])
+        companies = []
+        
+        for item in items:
+            company = Company(
+                name=self._safe_extract(item, self.config.selectors['company_name']),
+                address=self._safe_extract(item, self.config.selectors['address']),
+                phone=self._safe_extract(item, self.config.selectors['phone']),
+                website=self._safe_extract_href(item, self.config.selectors['website']),
+            )
+            
+            # Detay butonu varsa ürün gruplarını al
+            if self.config.selectors.get('detail_button'):
+                company.products = await self._extract_products(item, driver)
+            
+            companies.append(company)
+        
+        return companies
+```
+
+---
+
+#### [NEW] [enrichment/email_finder.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/enrichment/email_finder.py)
+
+Gelişmiş email bulma:
+
+```python
+class EnhancedEmailFinder:
+    """
+    Çoklu kaynaklardan email bulma.
+    """
+    CONTACT_PAGES = ['/contact', '/iletisim', '/kontakt', '/about', '/hakkimizda', '/impressum']
+    
+    async def find_emails(self, company: Company) -> List[str]:
+        emails = set()
+        
+        # 1. Ana sayfadan
+        if company.website:
+            emails.update(await self._scrape_page(company.website))
+        
+        # 2. İletişim sayfalarından
+        for page in self.CONTACT_PAGES:
+            if company.website:
+                url = urljoin(company.website, page)
+                emails.update(await self._scrape_page(url))
+        
+        # 3. Bing aramasından (fallback)
+        if not emails and company.name:
+            search_url = await self._bing_search(company.name)
+            if search_url:
+                emails.update(await self._scrape_page(search_url))
+        
+        return self._filter_valid_emails(list(emails))
+    
+    def _filter_valid_emails(self, emails: List[str]) -> List[str]:
+        """Geçersiz/spam emailleri filtrele."""
+        blacklist = ['noreply', 'no-reply', 'example.com', 'test.com', 'packagingfair.com']
+        return [e for e in emails if not any(b in e.lower() for b in blacklist)]
+```
+
+---
+
+#### [NEW] [enrichment/address_finder.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/enrichment/address_finder.py)
+
+Şirket websitesinden adres bulma:
+
+```python
+class AddressFinder:
+    """
+    Eksik adresleri şirket websitesinden çeker.
+    """
+    ADDRESS_SELECTORS = [
+        '[class*="address"]',
+        '[class*="adres"]',
+        '[itemtype*="PostalAddress"]',
+        'address',
+        '[class*="location"]',
+        '[class*="contact-info"]',
+    ]
+    
+    ADDRESS_PATTERNS = [
+        r'\d{5}\s+[A-Za-zığüşöçİĞÜŞÖÇ]+',  # Türk posta kodu
+        r'[A-Z]{1,2}\d{1,2}\s*\d[A-Z]{2}',  # UK posta kodu
+        r'\d{5}(?:-\d{4})?',  # US posta kodu
+    ]
+    
+    async def find_address(self, company: Company) -> Optional[str]:
+        if not company.website:
+            return None
+        
+        # İletişim sayfalarını tara
+        for page in ['/contact', '/iletisim', '/about']:
+            url = urljoin(company.website, page)
+            address = await self._extract_address(url)
+            if address:
+                return address
+        
+        return None
+    
+    async def _extract_address(self, url: str) -> Optional[str]:
+        """CSS selector ve regex ile adres çıkarma."""
+        ...
+```
+
+---
+
+#### [NEW] [utils/retry.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/utils/retry.py)
+
+Retry mekanizması:
+
+```python
+from functools import wraps
+import asyncio
+
+def retry_async(max_attempts: int = 3, delay: float = 1.0, backoff: float = 2.0):
+    """
+    Async fonksiyonlar için retry decorator.
+    Exponential backoff ile.
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            current_delay = delay
+            
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(current_delay)
+                        current_delay *= backoff
+            
+            raise last_exception
+        return wrapper
+    return decorator
+```
+
+---
+
+### Streamlit Integration
+
+#### [NEW] [7_HyperScrape.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/pages/7_HyperScrape.py)
+
+Yeni Streamlit sayfası:
+
+```python
+import streamlit as st
+from HyperScrape import HyperScrapeEngine, load_fair_configs
+
+st.set_page_config(page_title="HyperScrape Engine", layout="wide")
+
+st.title("🚀 HyperScrape Engine v2")
+st.markdown("*Yeni nesil fuar scraper - 10x daha hızlı*")
+
+# Sidebar
+with st.sidebar:
+    st.header("⚙️ Ayarlar")
+    
+    # Fuar seçimi
+    fairs = load_fair_configs()
+    selected_fair = st.selectbox("Fuar Seçin", list(fairs.keys()))
+    
+    # Sayfa sayısı
+    page_count = st.number_input("Sayfa Sayısı", min_value=1, max_value=100, value=5)
+    
+    # Gelişmiş ayarlar
+    with st.expander("🔧 Gelişmiş"):
+        parallel_workers = st.slider("Paralel İşçi Sayısı", 1, 10, 3)
+        enable_email_enrichment = st.checkbox("Email Zenginleştirme", value=True)
+        enable_address_enrichment = st.checkbox("Adres Zenginleştirme", value=True)
+        use_cache = st.checkbox("Cache Kullan", value=True)
+
+# Ana içerik
+if st.button("🚀 Scraping Başlat", type="primary"):
+    config = fairs[selected_fair]
+    engine = HyperScrapeEngine(config)
+    
+    # Progress bar
+    progress = st.progress(0)
+    status = st.empty()
+    
+    with st.spinner("Veriler çekiliyor..."):
+        results = asyncio.run(engine.scrape_all(
+            page_count=page_count,
+            progress_callback=lambda p, s: (progress.progress(p), status.text(s))
+        ))
+    
+    st.success(f"✅ {len(results)} firma başarıyla çekildi!")
+    
+    # Sonuçlar
+    df = results.to_dataframe()
+    st.dataframe(df, use_container_width=True)
+    
+    # İndirme seçenekleri
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.download_button("📥 Excel İndir", df.to_excel(), "results.xlsx")
+    with col2:
+        st.download_button("📥 CSV İndir", df.to_csv(), "results.csv")
+    with col3:
+        st.download_button("📥 JSON İndir", df.to_json(), "results.json")
+    
+    # Görselleştirmeler
+    st.subheader("📊 İstatistikler")
+    # Ülke dağılımı, email bulma başarısı vs.
+```
+
+---
+
+### Models
+
+#### [NEW] [models/fair.py](file:///c:/Users/serig/OneDrive/Masaüstü/development/data-instruction-tool/HyperScrape/models/fair.py)
+
+Veri modelleri:
+
+```python
+from dataclasses import dataclass, field
+from typing import Optional, List
+
+@dataclass
+class Company:
+    name: str = ""
+    website: str = ""
+    email: str = ""
+    email2: str = ""
+    phone: str = ""
+    address: str = ""
+    city: str = ""
+    country: str = ""
+    zip_code: str = ""
+    products: str = ""
+    data_source: str = ""
+    
+    # Enriched data
+    linkedin: str = ""
+    facebook: str = ""
+    instagram: str = ""
+    
+@dataclass
+class FairConfig:
+    name: str
+    base_url: str
+    pagination: str
+    template: str
+    selectors: dict = field(default_factory=dict)
+    
+@dataclass  
+class ScrapeResult:
+    companies: List[Company]
+    total_pages: int
+    success_count: int
+    error_count: int
+    duration_seconds: float
+    
+    def to_dataframe(self) -> pd.DataFrame:
+        return pd.DataFrame([c.__dict__ for c in self.companies])
+```
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+```bash
+# Template testleri
+python -m pytest HyperScrape/tests/ -v
+
+# Tek bir fuar ile test
+python -c "from HyperScrape import test_fair; test_fair('replast_eurasia', pages=1)"
+```
+
+### Manual Verification
+
+1. **Template Testleri**:
+   - [ ] Tuyap template: replast, burtarim, maktek sitelerinde test
+   - [ ] Deutsche Messe template: win-eurasia, sodex sitelerinde test
+   - [ ] Modal template: evchargeshow sitesinde test
+   - [ ] Card template: hvacr-world sitesinde test
+
+2. **Performans Testleri**:
+   - [ ] Eski sistem vs yeni sistem hız karşılaştırması
+   - [ ] 10 sayfa scraping süresi ölçümü
+   - [ ] Memory kullanımı kontrolü
+
+3. **Veri Kalitesi**:
+   - [ ] Email bulma oranı karşılaştırması
+   - [ ] Adres zenginleştirme doğruluğu
+   - [ ] Eksik veri yüzdesi kontrolü
+
+4. **Streamlit UI**:
+   - [ ] Tüm fuar seçeneklerinin çalıştığını doğrulama
+   - [ ] Progress bar güncellemelerinin düzgün çalıştığını kontrol
+   - [ ] İndirme butonlarının çalıştığını test
+
+---
+
+## Expected Improvements
+
+| Metrik | Eski Sistem | Yeni Sistem | İyileşme |
+|--------|-------------|-------------|----------|
+| Kod Satırı | ~3500 | ~1500 | %57 azalma |
+| Yeni Site Ekleme | 100+ satır | 20 satır config | %80 azalma |
+| Scraping Hızı | 1x | 5-10x | 5-10x artış |
+| Email Bulma | Temel | Gelişmiş | %50+ artış |
+| Adres Bulma | Yok | Var | Yeni özellik |
+| Bakım Kolaylığı | Zor | Kolay | Önemli iyileşme |
