@@ -280,11 +280,12 @@ def scrape_mesago(sayfa_sayisi):
                             except:
                                 pass
                         
-                        # Ürün Grupları (Keywords)
+                        # Ürün Grupları (Product Groups)
                         urun_gruplari = ""
                         try:
-                            urun_li_list = driver.find_elements(By.CSS_SELECTOR, "div.ex-keyword-list__container ul li.ex-keyword-list__keyword")
-                            urun_gruplari = ", ".join([li.text.strip() for li in urun_li_list if li.text.strip()])
+                            # "Our product groups" bölümünden ürün gruplarını al
+                            urun_li_list = driver.find_elements(By.CSS_SELECTOR, "div.ex-exhibitor-detail-categories li.ex-list-toggle__list-item span")
+                            urun_gruplari = ", ".join([span.text.strip() for span in urun_li_list if span.text.strip()])
                         except:
                             urun_gruplari = ""
                         
