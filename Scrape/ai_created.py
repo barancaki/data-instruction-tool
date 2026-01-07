@@ -289,6 +289,40 @@ def scrape_mesago(sayfa_sayisi):
                         except:
                             urun_gruplari = ""
                         
+                        # Adres Bilgileri
+                        adres = ""
+                        posta_kodu = ""
+                        sehir = ""
+                        ulke = ""
+                        
+                        try:
+                            # Sokak/Adres
+                            adres_elem = driver.find_element(By.CSS_SELECTOR, "p.ex-contact-box__address-field-street")
+                            adres = adres_elem.text.strip()
+                        except:
+                            adres = ""
+                        
+                        try:
+                            # Posta Kodu
+                            posta_elem = driver.find_element(By.CSS_SELECTOR, "span.ex-contact-box__address-field-zip")
+                            posta_kodu = posta_elem.text.strip()
+                        except:
+                            posta_kodu = ""
+                        
+                        try:
+                            # Şehir
+                            sehir_elem = driver.find_element(By.CSS_SELECTOR, "span.ex-contact-box__address-field-city")
+                            sehir = sehir_elem.text.strip()
+                        except:
+                            sehir = ""
+                        
+                        try:
+                            # Ülke
+                            ulke_elem = driver.find_element(By.CSS_SELECTOR, "span.ex-contact-box__address-field-country")
+                            ulke = ulke_elem.text.strip()
+                        except:
+                            ulke = ""
+                        
                         print(f"  ✅ {firma_adi}")
 
                         tablo.append({
@@ -299,10 +333,10 @@ def scrape_mesago(sayfa_sayisi):
                             "CompanyMail": email,
                             "CompanyMail2": "",
                             "CompanyPhone": telefon,
-                            "CompanyAddress": "",
-                            "CompanyZipCode": "",
-                            "CompanyCity": "",
-                            "CompanyCountry": "",
+                            "CompanyAddress": adres,
+                            "CompanyZipCode": posta_kodu,
+                            "CompanyCity": sehir,
+                            "CompanyCountry": ulke,
                             "Detay Link": detay_link
                         })
 
