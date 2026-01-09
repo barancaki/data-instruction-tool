@@ -1,6 +1,7 @@
 import pandas as pd
 import time
 import io
+import re
 import streamlit as st
 import plotly.express as px
 from selenium import webdriver
@@ -9,6 +10,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from Scrape.scrape import site_icerisinden_email_bul
+
 
 def scrape_advanced_engineering(sayfa_sayisi):
     options = Options()
@@ -591,6 +593,245 @@ def scrape_gitex_africa_morocco(scroll_sayisi):
         print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
         if not df.empty and "CompanyCountry" in df.columns:
             print(df["CompanyCountry"].value_counts())
+            
+    return df
+
+def scrape_yasad_uyeler(sayfa_sayisi):
+    """
+    YASAD (Yazılım Sanayicileri Derneği) üye firmalarını çeker.
+    https://www.yasad.org.tr/uyelerimiz/
+    Pagination: /page/2/, /page/3/ formatında
+    """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://www.yasad.org.tr/uyelerimiz/"
+    tablo = []
+    firma_bilgileri_tum = []  # Tüm sayfalardan toplanan firma bilgileri
+
+    try:
+        # Her sayfa için döngü
+        for page_num in range(1, sayfa_sayisi + 1):
+            print(f"\n🔄 {page_num}. sayfa işleniyor...")
+            
+            # Sayfa URL'ini oluştur
+            if page_num == 1:
+                current_url = base_url
+            else:
+                current_url = f"{base_url}page/{page_num}/"
+            
+            print(f"📄 URL: {current_url}")
+            driver.get(current_url)
+            time.sleep(3)
+
+            # Scroll yaparak lazy loading içeriği yükle
+            print(f"📜 Sayfa içeriği yükleniyor...")
+            for scroll_num in range(3):  # Her sayfada 3 kez scroll yap
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(1)
+                driver.execute_script("window.scrollBy(0, -200);")
+                time.sleep(0.5)
+
+            # Liste sayfasındaki firma kartlarını bul
+            firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "li.post-card.fusion-grid-column")
+            if not firma_kartlari:
+                # Alternatif selector dene
+                firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "li.fusion-post-cards-grid-column")
+            
+            if not firma_kartlari:
+                print(f"⚠️ {page_num}. sayfada firma bulunamadı. Pagination sona ermiş olabilir.")
+                break
+            else:
+                print(f"📊 {len(firma_kartlari)} firma bulundu")
+
+                # Detay linklerini ve firma isimlerini topla
+                for kart in firma_kartlari:
+                    try:
+                        # Firma adı ve detay linki h2.fusion-title-heading içindeki a etiketinden
+                        baslik_elem = kart.find_element(By.CSS_SELECTOR, "h2.fusion-title-heading a")
+                        firma_adi = baslik_elem.text.strip()
+                        detay_link = baslik_elem.get_attribute("href")
+                        
+                        if detay_link and firma_adi:
+                            firma_bilgileri_tum.append({
+                                "firma_adi": firma_adi,
+                                "detay_link": detay_link
+                            })
+                    except Exception as e:
+                        continue
+                
+                print(f"🔗 Bu sayfadan {len(firma_kartlari)} firma linki toplandı")
+
+        print(f"\n✅ Toplam {len(firma_bilgileri_tum)} firma linki toplandı")
+        
+        # Her firmanın detay sayfasına git
+        for idx, bilgi in enumerate(firma_bilgileri_tum, 1):
+            try:
+                detay_link = bilgi["detay_link"]
+                firma_adi = bilgi["firma_adi"]
+                
+                print(f"  {idx}/{len(firma_bilgileri_tum)}. 🔍 {firma_adi} - Detay sayfası açılıyor...")
+                driver.get(detay_link)
+                time.sleep(2)
+
+                # Website
+                website = ""
+                try:
+                    # Website genellikle sosyal linkler arasında veya iletişim bölümünde
+                    website_elems = driver.find_elements(By.CSS_SELECTOR, "a[href*='http']")
+                    for elem in website_elems:
+                        href = elem.get_attribute("href")
+                        text = elem.text.strip().lower()
+                        # Firma websitesi olabilecek linkleri filtrele
+                        if href and "yasad.org.tr" not in href:
+                            if "web" in text or "site" in text or "www" in href:
+                                website = href
+                                break
+                            # LinkedIn, Facebook vb. değilse ve http ile başlıyorsa
+                            if not any(x in href.lower() for x in ["linkedin", "facebook", "twitter", "instagram", "youtube", "mailto:", "tel:"]):
+                                if not website:  # İlk uygun linki al
+                                    website = href
+                except:
+                    website = ""
+
+                # Email - sayfadan çek
+                email = ""
+                try:
+                    # Önce fusion-li-item-content div'lerinde email ara
+                    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+                    
+                    content_divs = driver.find_elements(By.CSS_SELECTOR, "div.fusion-li-item-content")
+                    for div in content_divs:
+                        text = div.text.strip()
+                        if '@' in text:
+                            # Regex ile email'i çıkar
+                            match = re.search(email_pattern, text)
+                            if match:
+                                email = match.group(0)
+                                break
+                    
+                    # Bulamazsa mailto: linklerde ara
+                    if not email:
+                        mailto_elems = driver.find_elements(By.CSS_SELECTOR, "a[href^='mailto:']")
+                        for elem in mailto_elems:
+                            mailto_href = elem.get_attribute("href")
+                            if mailto_href:
+                                email = mailto_href.replace("mailto:", "").split("?")[0].strip()
+                                break
+                except:
+                    pass
+                
+                # Eğer email bulunamadıysa ve website varsa, website'den ara
+                if not email and website:
+                    try:
+                        print(f"     🔎 Website'den email aranıyor...")
+                        email_list = site_icerisinden_email_bul(website)
+                        if email_list and len(email_list) > 0:
+                            for mail in email_list:
+                                if mail and "@" in mail:
+                                    email = mail
+                                    break
+                    except:
+                        pass
+
+                # Telefon
+                telefon = ""
+                try:
+                    tel_elems = driver.find_elements(By.CSS_SELECTOR, "a[href^='tel:']")
+                    for elem in tel_elems:
+                        tel_href = elem.get_attribute("href")
+                        if tel_href:
+                            telefon = tel_href.replace("tel:", "").strip()
+                            break
+                except:
+                    telefon = ""
+
+                # Ürün/Hizmet açıklaması (varsa)
+                urun_gruplari = ""
+                try:
+                    # Açıklama metni varsa al
+                    aciklama_elems = driver.find_elements(By.CSS_SELECTOR, "div.fusion-text p")
+                    aciklama_list = []
+                    for elem in aciklama_elems:
+                        text = elem.text.strip()
+                        if text and len(text) > 20:  # Sadece anlamlı uzunluktaki metinleri al
+                            aciklama_list.append(text)
+                    if aciklama_list:
+                        urun_gruplari = " | ".join(aciklama_list[:3])  # İlk 3 paragrafı al
+                except:
+                    urun_gruplari = ""
+
+                print(f"  ✅ {firma_adi}")
+
+                tablo.append({
+                    "Data Source/E_Exhibition": "YASAD Üyeleri",
+                    "Product": urun_gruplari,
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": website,
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": telefon,
+                    "CompanyAddress": "",
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": "Türkiye",
+                    "Detay Link": detay_link
+                })
+
+            except Exception as e:
+                print(f"  ❌ Firma detayı işlenirken hata: {e}")
+                continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # !!! TÜM YENİ FONKSİYONLAR BU BLOĞU İÇERMELİ !!!
+    if st:
+        st.dataframe(df)
+        
+        
+        # 📥 Excel İndir
+        try:
+            excel_buffer = io.BytesIO()
+            df.to_excel(excel_buffer, index=False, engine='openpyxl')
+            excel_buffer.seek(0)
+            st.download_button(
+                label="📥 Excel (.xlsx) İndir",
+                data=excel_buffer,
+                file_name=f"{st.session_state.get('function_name', 'yasad_uyeler')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except ImportError:
+            st.warning("⚠️ Excel (.xlsx) indirme için 'openpyxl' modülü gerekli. Lütfen `pip install openpyxl` komutunu çalıştırın.")
+        except Exception as e:
+            st.error(f"❌ Excel oluşturulurken hata: {e}")
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'yasad_uyeler')}.csv",
+            mime="text/csv"
+        )
+        
+        # İstatistikler
+        if not df.empty:
+            st.info(f"📊 Toplam {len(df)} firma bilgisi çekildi.")
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty:
+            print(f"Toplam firma: {len(df)}")
             
     return df
 
