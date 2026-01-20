@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_euroshop
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
 from Scrape.a_sablon import scrape_enosad_proses_all_members,scrape_enosad_fabrika_all_members,scrape_enosad_robotik_all_members,scrape_enosad_sanayi_all_members,scrape_roboder_all_members
@@ -258,15 +258,6 @@ if url in ["https://www.yasad.org.tr/uyelerimiz/", "https://www.yasad.org.tr/uye
             with st.spinner("Pages are being scanned..."):
                 st.session_state['function_name'] = 'yasad_uyeler'
                 scrape_yasad_uyeler(int(sayfa_sayisi))
-            st.success("The scan is complete!")
-
-if url in ["https://www.euroshop-tradefair.com/vis/v1/en/search?ticket=g_u_e_s_t&_query=&f_type=profile", "https://www.euroshop-tradefair.com/vis/v1/en/search"]:
-    sayfa_sayisi = st.text_input("How many pages do you want to scrape?")
-    if sayfa_sayisi:
-        if st.button("Scan"):
-            with st.spinner("Pages are being scanned..."):
-                st.session_state['function_name'] = 'euroshop'
-                scrape_euroshop(int(sayfa_sayisi))
             st.success("The scan is complete!")
 
 st.text('© Baran Çakı 2025')
