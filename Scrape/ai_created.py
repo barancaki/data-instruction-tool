@@ -835,3 +835,256 @@ def scrape_yasad_uyeler(sayfa_sayisi):
             
     return df
 
+
+def scrape_euroshop(sayfa_sayisi):
+    """
+    EUROSHOP için scraping fonksiyonu
+    Pagination: ?_start=30, ?_start=60 şeklinde 30'ar 30'ar artarak
+    """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://www.euroshop-tradefair.com/vis/v1/en/search"
+    tablo = []
+
+    try:
+        for page_num in range(1, sayfa_sayisi + 1):
+            print(f"\n🔄 {page_num}. sayfa işleniyor...")
+
+            try:
+                # Sayfa URL'ini oluştur
+                if page_num == 1:
+                    current_url = f"{base_url}?ticket=g_u_e_s_t&_query=&f_type=profile"
+                else:
+                    start_value = (page_num - 1) * 30
+                    current_url = f"{base_url}?_query=&_start={start_value}&f_type=profile"
+                
+                driver.get(current_url)
+                time.sleep(3)
+
+                # Liste sayfasındaki firma kartlarını bul
+                firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "ul.search__results-list li")
+                if not firma_kartlari:
+                    print(f"⚠️ {page_num}. sayfada firma bulunamadı.")
+                    break
+                
+                print(f"📊 {len(firma_kartlari)} firma bulundu")
+
+                # Detay linklerini topla
+                firma_linkleri = []
+                for kart in firma_kartlari:
+                    try:
+                        detay_link = None
+                        
+                        # Yöntem 1: Logo image içindeki parent link
+                        try:
+                            logo_elem = kart.find_element(By.CSS_SELECTOR, "img.teaser-tile__image")
+                            # Logo'nun parent'ı a etiketi olmalı
+                            parent = logo_elem.find_element(By.XPATH, "..")
+                            if parent.tag_name == "a":
+                                detay_link = parent.get_attribute("href")
+                            else:
+                                # Bir üst parent'a bak
+                                grandparent = parent.find_element(By.XPATH, "..")
+                                if grandparent.tag_name == "a":
+                                    detay_link = grandparent.get_attribute("href")
+                        except:
+                            pass
+                        
+                        # Yöntem 2: teaser-tile__image-link
+                        if not detay_link:
+                            try:
+                                detay_link_elem = kart.find_element(By.CSS_SELECTOR, "a.teaser-tile__image-link")
+                                detay_link = detay_link_elem.get_attribute("href")
+                            except:
+                                pass
+                        
+                        # Yöntem 3: figure içindeki a
+                        if not detay_link:
+                            try:
+                                detay_link_elem = kart.find_element(By.CSS_SELECTOR, "figure a")
+                                detay_link = detay_link_elem.get_attribute("href")
+                            except:
+                                pass
+                        
+                        # Yöntem 4: article içindeki ilk a
+                        if not detay_link:
+                            try:
+                                detay_link_elem = kart.find_element(By.CSS_SELECTOR, "article a")
+                                detay_link = detay_link_elem.get_attribute("href")
+                            except:
+                                pass
+                        
+                        # Yöntem 5: Herhangi bir a etiketi
+                        if not detay_link:
+                            try:
+                                detay_link_elem = kart.find_element(By.TAG_NAME, "a")
+                                detay_link = detay_link_elem.get_attribute("href")
+                            except:
+                                pass
+                        
+                        if detay_link:
+                            # Eğer relative URL ise, base URL ile birleştir
+                            if detay_link.startswith("/"):
+                                detay_link = "https://www.euroshop-tradefair.com" + detay_link
+                            firma_linkleri.append(detay_link)
+                            print(f"  🔗 Link bulundu: {detay_link[:80]}...")
+                    except Exception as e:
+                        print(f"  ⚠️ Link bulunamadı: {e}")
+                        continue
+                
+                print(f"🔗 {len(firma_linkleri)} firma linki toplandı")
+
+                # Her firmanın detay sayfasına git
+                for idx, detay_link in enumerate(firma_linkleri, 1):
+                    try:
+                        print(f"  {idx}/{len(firma_linkleri)}. 🔍 Detay sayfası açılıyor...")
+                        driver.get(detay_link)
+                        time.sleep(2)
+
+                        # Firma adı
+                        try:
+                            firma_adi = driver.find_element(By.CSS_SELECTOR, "#vis__profile > div > div > div.profile-grid__content.profile-grid__content--primary > div.profile-head > h1").text.strip()
+                        except:
+                            firma_adi = ""
+                        
+                        # Şehir ve Ülke
+                        sehir = ""
+                        ulke = ""
+                        try:
+                            location_elem = driver.find_element(By.CSS_SELECTOR, "#vis__profile > div > div > div.profile-grid__content.profile-grid__content--primary > div.profile__location > div")
+                            location_text = location_elem.text.strip()
+                            # Format genellikle "City, Country" şeklinde
+                            if "," in location_text:
+                                parts = location_text.split(",")
+                                sehir = parts[0].strip()
+                                ulke = parts[1].strip() if len(parts) > 1 else ""
+                            else:
+                                ulke = location_text
+                        except:
+                            pass
+                        
+                        # Ürün Grupları
+                        try:
+                            urun_elem = driver.find_element(By.CSS_SELECTOR, "#vis__products > div.products__filter-bar")
+                            urun_gruplari = urun_elem.text.strip()
+                        except:
+                            urun_gruplari = ""
+                        
+                        # Website yok, Google'dan arayacağız
+                        website = ""
+                        email = ""
+                        
+                        if firma_adi:
+                            try:
+                                print(f"     🔎 Google'da '{firma_adi}' aranıyor...")
+                                # Google'da firma adını ara
+                                google_url = f"https://www.google.com/search?q={firma_adi.replace(' ', '+')}"
+                                driver.get(google_url)
+                                time.sleep(2)
+                                
+                                # İlk sonucu bul
+                                try:
+                                    first_result = driver.find_element(By.CSS_SELECTOR, "div.g a")
+                                    website = first_result.get_attribute("href")
+                                    print(f"     ✅ Website bulundu: {website}")
+                                except:
+                                    print(f"     ⚠️ Google'da sonuç bulunamadı")
+                                    pass
+                                
+                                # Website bulunduysa email ara
+                                if website:
+                                    try:
+                                        print(f"     🔎 Website'den email aranıyor...")
+                                        email_list = site_icerisinden_email_bul(website)
+                                        if email_list and len(email_list) > 0:
+                                            for mail in email_list:
+                                                if mail and "@" in mail:
+                                                    email = mail
+                                                    break
+                                    except:
+                                        pass
+                            except Exception as e:
+                                print(f"     ❌ Google arama hatası: {e}")
+
+                        print(f"  ✅ {firma_adi}")
+
+                        tablo.append({
+                            "Data Source/E_Exhibition": "EUROSHOP",
+                            "Product": urun_gruplari,
+                            "CompanyName": firma_adi,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email,
+                            "CompanyMail2": "",
+                            "CompanyPhone": "",
+                            "CompanyAddress": "",
+                            "CompanyZipCode": "",
+                            "CompanyCity": sehir,
+                            "CompanyCountry": ulke,
+                            "Detay Link": detay_link
+                        })
+
+                    except Exception as e:
+                        print(f"  ❌ Firma detayı işlenirken hata: {e}")
+                        continue
+
+            except Exception as e:
+                print(f"❌ Sayfa {page_num} işlenirken hata: {e}")
+                break
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # !!! TÜM YENİ FONKSİYONLAR BU BLOĞU İÇERMELİ !!!
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Excel (.xlsx) İndir",
+            data=excel_buffer,
+            file_name=f"{st.session_state.get('function_name', 'euroshop')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'euroshop')}.csv",
+            mime="text/csv"
+        )
+        
+        # 📊 Grafikler (Ülke bilgisi varsa)
+        if not df.empty and "CompanyCountry" in df.columns:
+            try:
+                ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
+                ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+                fig = px.bar(ulke_sayilari.head(20), x="Ülke", y="Firma Sayısı", 
+                            title="Ülkelere Göre Firma Dağılımı")
+                st.plotly_chart(fig)
+            except Exception as e:
+                st.error(f"Grafik çizilirken hata: {e}")
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty:
+            print(f"Toplam firma: {len(df)}")
+            if "CompanyCountry" in df.columns:
+                print(df["CompanyCountry"].value_counts())
+            
+    return df
+
