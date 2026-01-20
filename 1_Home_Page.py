@@ -25,6 +25,7 @@ def load_config():
         'PASSWORD_DILARA',
         'PASSWORD_SERPIL',
         'PASSWORD_CIHAN',
+        'PASSWORD_ANIL',
         'COOKIE_KEY',
         'COOKIE_NAME',
         'COOKIE_EXPIRY_DAYS',
@@ -48,7 +49,8 @@ def load_config():
         os.getenv('PASSWORD_SEFA'),
         os.getenv('PASSWORD_DILARA'),
         os.getenv('PASSWORD_SERPIL'),
-        os.getenv('PASSWORD_CIHAN')
+        os.getenv('PASSWORD_CIHAN'),
+        os.getenv('PASSWORD_ANIL')
     ]
     
     # Şifreleri hash'le (hata olursa net mesaj ver)
@@ -91,6 +93,11 @@ def load_config():
                     'email': 'cihan.keser@hf-turkey.com',
                     'name': 'Cihan (Admin)',
                     'password': hashed_passwords[5]
+                },
+                'anil.hft': {
+                    'email': 'anil@hotmail.com',
+                    'name': 'Anıl',
+                    'password': hashed_passwords[6]
                 }
             }
         },
@@ -160,7 +167,7 @@ def main():
         with col1:
             st.metric(
                 label="👥 Total users", 
-                value="5", 
+                value="6", 
                 delta="Active",
                 delta_color="normal"
             )
@@ -215,10 +222,10 @@ def main():
             st.subheader("User Table")
             
             user_data = pd.DataFrame({
-                'User': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil'],
-                'Full Name': ['Baran Çakı', 'User', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen'],
-                'Role': ['Admin', 'User', 'User', 'User', 'Admin'],
-                'Status': ['Active', 'Disabled', 'Active', 'Active', 'Active']
+                'User': ['admin', 'kullanici', 'sefa', 'dilara', 'serpil', 'anil'],
+                'Full Name': ['Baran Çakı', 'User', 'Sefa Uyar', 'Dilara Ay', 'Serpil Sözen', 'Anıl'],
+                'Role': ['Admin', 'User', 'User', 'User', 'Admin', 'User'],
+                'Status': ['Active', 'Disabled', 'Active', 'Active', 'Active', 'Active']
             })
             
             st.dataframe(user_data, use_container_width=True)
