@@ -9,10 +9,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-from Scrape.scrape import site_icerisinden_email_bul
+from Scrape.scrape import site_icerisinden_email_bul, bing_ilk_link_al, google_ilk_link_al, duckduckgo_search_selenium, extract_emails_from_source, find_email_advanced
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 
 
 def scrape_advanced_engineering(sayfa_sayisi):
@@ -1042,12 +1043,142 @@ def scrape_logimat(show_more_count):
         if not df.empty:
             st.success(f"Başarıyla {len(df)} firma çekildi!")
             st.dataframe(df)
-            
+
             excel_buffer = io.BytesIO()
             df.to_excel(excel_buffer, index=False, engine='openpyxl')
             excel_buffer.seek(0)
             st.download_button(label="📥 Excel İndir", data=excel_buffer, file_name="logimat_2026.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else:
             st.warning("Veri çekilemedi.")
-            
+
+    return df
+
+def scrape_acrex_india():
+    """
+    Acrex India 2026 Exhibitor List Scraping Fonksiyonu (DDG + Advanced Email Search)
+    """
+    print("🚀 Tarayıcı başlatılıyor...")
+    options = Options()
+    options.add_argument("--headless") # Hata ayıklarken kapalı tutun, çalıştığını görünce açabilirsiniz.
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--start-maximized") # Pencereyi tam ekran yap
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    # Sayfa yükleme stratejisini değiştir (daha hızlı olması için 'eager' denenebilir ama 'normal' daha güvenli)
+    options.page_load_strategy = 'normal'
+
+    try:
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    except Exception as e:
+        print(f"❌ Driver başlatılamadı: {e}")
+        return pd.DataFrame()
+
+    base_url = "https://acrex.in/ExhibitorList-2026"
+    
+    # --- 1. ADIM: Temel Verileri Çek ---
+    ham_veriler = []
+    try:
+        print(f"🔄 Ana sayfa yükleniyor: {base_url}")
+        driver.get(base_url)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div.exhibit_card"))
+        )
+        time.sleep(3) # Ekstra bekleme
+        
+        firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.exhibit_card")
+        print(f"📊 {len(firma_kartlari)} firma kartı bulundu. Veriler hafızaya alınıyor...")
+        
+        for kart in firma_kartlari:
+            try:
+                temp_data = {}
+                temp_data['name'] = kart.find_element(By.CSS_SELECTOR, "h4").text.strip()
+                temp_data['hall'] = ""
+                temp_data['stall'] = ""
+                
+                h5_elements = kart.find_elements(By.CSS_SELECTOR, "h5")
+                for h5 in h5_elements:
+                    text = h5.text
+                    if "Hall No:" in text:
+                        temp_data['hall'] = text.replace("Hall No:", "").strip()
+                    if "Stall No:" in text:
+                        temp_data['stall'] = text.replace("Stall No:", "").strip()
+                
+                if temp_data['name']:
+                    ham_veriler.append(temp_data)
+            except:
+                continue
+    except Exception as e:
+        print(f"❌ Liste çekme aşamasında hata: {e}")
+        driver.quit()
+        return pd.DataFrame()
+
+    print(f"✅ {len(ham_veriler)} firmanın temel bilgileri alındı. Detaylı tarama başlıyor...")
+    print("-" * 50)
+    
+    # --- 2. ADIM: Detaylı Arama Döngüsü ---
+    tablo = []
+    
+    # Test için ilk 5 firmada deneyelim, çalışırsa [:5] kısmını kaldırın
+    # for idx, firma in enumerate(ham_veriler[:5], 1): 
+    for idx, firma in enumerate(ham_veriler, 1):
+        firma_adi = firma['name']
+        print(f"\nProcessing [{idx}/{len(ham_veriler)}]: {firma_adi}")
+        
+        # DuckDuckGo ile Website Bul
+        website = duckduckgo_search_selenium(driver, firma_adi)
+        
+        # Website bulunduysa Email Ara (Ana sayfa + İletişim sayfası)
+        email = ""
+        if website:
+            email = find_email_advanced(driver, website)
+        
+        tablo.append({
+            "Data Source": "Acrex India",
+            "CompanyName": firma_adi,
+            "CompanyWebsite": website if website else "Not Found",
+            "CompanyMail": email if email else "Not Found",
+            "Hall No": firma['hall'],
+            "Stall No": firma['stall'],
+            "CompanyCountry": "India",
+        })
+        
+        # DDG'yi çok seri sorgulamamak için kısa bir bekleme
+        time.sleep(2)
+
+    print("-" * 50)
+    print("🏁 Tüm işlemler tamamlandı. Tarayıcı kapatılıyor.")
+    driver.quit()
+
+    # DataFrame Oluşturma
+    df = pd.DataFrame(tablo)
+
+    # Streamlit Kontrolü (Eğer bu kod Streamlit içinde çalışıyorsa butonları göster)
+    import sys
+    if 'streamlit' in sys.modules:
+        import streamlit as st
+        st.success(f"✅ Tarama Tamamlandı! Toplam {len(df)} firma işlendi.")
+        st.dataframe(df)
+        
+        col1, col2 = st.columns(2)
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        
+        col1.download_button(
+            label="📥 Excel Olarak İndir",
+            data=excel_buffer.getvalue(),
+            file_name="acrex_india_results.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+        csv = df.to_csv(index=False).encode('utf-8-sig')
+        col2.download_button(
+            label="📥 CSV Olarak İndir",
+            data=csv,
+            file_name="acrex_india_results.csv",
+            mime="text/csv"
+        )
+
     return df

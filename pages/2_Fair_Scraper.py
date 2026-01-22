@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
 from Scrape.a_sablon import scrape_enosad_proses_all_members,scrape_enosad_fabrika_all_members,scrape_enosad_robotik_all_members,scrape_enosad_sanayi_all_members,scrape_roboder_all_members
@@ -268,5 +268,19 @@ if url in ["https://www.logimat-messe.de/en/fair/exhibitor-directory", "https://
                 st.session_state['function_name'] = 'logimat'
                 scrape_logimat(int(show_more_sayisi))
             st.success("The scan is complete!")
+
+if url in ["https://acrex.in/ExhibitorList-2026"]:
+    if st.button("Scan"):
+        with st.spinner("Pages are being scanned..."):
+            if 'scraping_in_progress' not in st.session_state:
+                st.session_state['scraping_in_progress'] = False
+            if not st.session_state['scraping_in_progress']:
+                st.session_state['scraping_in_progress'] = True
+                st.session_state['function_name'] = 'acrex_india'
+                scrape_acrex_india()
+                st.session_state['scraping_in_progress'] = False
+            else:
+                st.warning("Scraping already in progress...")
+        st.success("The scan is complete!")
 
 st.text('© Baran Çakı 2025')
