@@ -840,602 +840,214 @@ def scrape_yasad_uyeler(sayfa_sayisi):
 
 def scrape_logimat(show_more_count):
     """
-    LogiMAT 2026 için scraping fonksiyonu - DÜZELTİLMİŞ VERSİYON
-    https://www.logimat-messe.de/en/fair/exhibitor-directory#/search/f=h-entity_orga;v_sg=0;v_fg=0;v_fpa=FUTURE
-    
-    DÜZELTİLENLER:
-    1. URL hash fragment eklendi (firmalar görünmesi için)
-    2. Explicit wait ile GWT yüklenmesi bekleniyor
-    3. Popup selector düzeltildi - yerine URL navigasyonu kullanılıyor
-    4. Duplicate link kontrolü eklendi
+    LogiMAT 2026 Scraping Fonksiyonu - Düzeltilmiş Show More Mantığı
     """
+    
+    # --- Tarayıcı Ayarları ---
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless")  # Hata ayıklarken headless'ı kapalı tutmak iyidir, üretimde açabilirsiniz.
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
     base_url = "https://www.logimat-messe.de/en/fair/exhibitor-directory#/search/f=h-entity_orga;v_sg=0;v_fg=0;v_fpa=FUTURE"
     tablo = []
-    seen_firma_links = set()
-
+    
     try:
         print(f"🔄 Ana sayfa yükleniyor...")
         driver.get(base_url)
         
-        print(f"⏳ JavaScript içeriği yükleniyor...")
-        time.sleep(15)
-        
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(2)
-
-        print(f"\n📋 Mevcut firma kartları toplanıyor...")
+        # İlk yükleme beklemesi
         try:
-            WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.EWP5KKC-w-J.EWP5KKC-w-U"))
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.EWP5KKC-w-J"))
             )
-        except Exception:
-            print(f"⚠️ Firma kartları yüklenmesi için zaman aşımı, devam ediliyor...")
+            time.sleep(3) # Ekstra stabilizasyon beklemesi
+        except:
+            print("⚠️ Sayfa yüklenirken zaman aşımı, devam ediliyor...")
 
-        firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-w-J.EWP5KKC-w-U")
-
-        if not firma_kartlari:
-            print(f"❌ Hiçbir firma kartı bulunamadı.")
-        else:
-            print(f"📊 {len(firma_kartlari)} firma kartı bulundu")
-
-            for idx, kart in enumerate(firma_kartlari, 1):
+        # --- Show More Döngüsü (DÜZELTİLEN KISIM) ---
+        if show_more_count > 0:
+            print(f"\n🔄 'Show More' butonuna {show_more_count} kez basılacak...")
+            
+            for i in range(show_more_count):
                 try:
-                    firma_adi = ""
-                    try:
-                        label_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-Q")
-                        firma_adi = label_elem.get_attribute("title").strip() if label_elem else ""
-                    except Exception:
-                        try:
-                            label_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-Q")
-                            firma_adi = label_elem.text.strip() if label_elem else ""
-                        except Exception:
-                            pass
+                    # 1. Adım: Sayfanın en altına in (Butonun görünür alana girmesi için)
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(1) # Kaydırma animasyonu için kısa bekleme
 
-                    lokasyon = ""
-                    try:
-                        lokasyon_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-m")
-                        lokasyon = lokasyon_elem.get_attribute("title").strip() if lokasyon_elem else ""
-                    except Exception:
-                        pass
+                    # 2. Adım: Tüm "Show more" buton adaylarını bul
+                    # HTML'e göre buton classları: EWP5KKC-u-a ve EWP5KKC-u-d
+                    buttons = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-u-a.EWP5KKC-u-d")
+                    
+                    clicked = False
+                    target_btn = None
 
-                    posta_kodu = ""
-                    sehir = ""
-                    ulke = ""
-
-                    if lokasyon:
-                        parts = lokasyon.split(", ")
-                        if len(parts) >= 1:
-                            first_part = parts[0].strip()
-                            if first_part and first_part[0].isdigit():
-                                parts_first = first_part.split(" ")
-                                if len(parts_first) >= 2:
-                                    posta_kodu = parts_first[0].strip()
-                                    sehir = " ".join(parts_first[1:]).strip()
-                                else:
-                                    sehir = first_part
-                            else:
-                                sehir = first_part
+                    # 3. Adım: Sadece GÖRÜNÜR (displayed) olan butonu bul
+                    for btn in buttons:
+                        if btn.is_displayed() and "Show more" in btn.text:
+                            target_btn = btn
+                            break
+                    
+                    if target_btn:
+                        # Butonu ortalayarak emin ol
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_btn)
+                        time.sleep(1)
                         
-                        if len(parts) >= 2:
-                            ulke = parts[-1].strip()
-
-                    stand_no = ""
-                    try:
-                        stand_label_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-a")
-                        stand_text = stand_label_elem.text.strip() if stand_label_elem else ""
-                        if "Stand" in stand_text:
-                            stand_no = stand_text.split("Stand")[-1].strip()
-                        else:
-                            stand_no = stand_text
-                    except Exception:
-                        pass
-
-                    detay_link = ""
-                    try:
-                        detay_link_elem = kart.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-d-m")
-                        detay_link = detay_link_elem.get_attribute("href") if detay_link_elem else ""
-                    except Exception:
-                        pass
-
-                    website = ""
-                    email = ""
-                    telefon = ""
-                    adres = ""
-                    urun_gruplari = ""
-
-                    if detay_link and "#/detail/" in detay_link:
-                        if detay_link in seen_firma_links:
-                            print(f"  ⏭️  {firma_adi} - Zaten işlendi, atlanıyor...")
-                            continue
+                        # JavaScript ile tıkla (Selenium click bazen element overlay hatası verebilir)
+                        driver.execute_script("arguments[0].click();", target_btn)
                         
-                        seen_firma_links.add(detay_link)
+                        print(f"   ✅ {i+1}. sayfa yüklendi.")
                         
-                        try:
-                            print(f"  {idx}/{len(firma_kartlari)}. 🔍 {firma_adi} - Detay açılıyor...")
-                            
-                            current_url = driver.current_url.split('#')[0]
-                            full_detail_url = current_url + detay_link.split('#')[-1]
-                            driver.get(full_detail_url)
-                            time.sleep(3)
-                            
-                            try:
-                                WebDriverWait(driver, 10).until(
-                                    EC.presence_of_element_located((By.CSS_SELECTOR, "[itemprop='legalName']"))
-                                )
-                            except Exception:
-                                print(f"    ⚠️ Detay modalı yüklenmedi")
-                                driver.get(base_url)
-                                time.sleep(2)
-                            else:
-                                try:
-                                    # Product (Categories) - tüm kategorileri al
-                                    urun_gruplari = ""
-                                    try:
-                                        category_labels = driver.find_elements(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-y-H")
-                                        urun_ismi_listesi = []
-                                        for cat_label in category_labels:
-                                            cat_text = cat_label.text.strip() if cat_label else ""
-                                            if cat_text and cat_text != "Categories":
-                                                urun_ismi_listesi.append(cat_text)
-                                        if urun_ismi_listesi:
-                                            urun_gruplari = ", ".join(urun_ismi_listesi)
-                                    except Exception:
-                                        pass
-                                    
-                                    # Website - .EWP5KKC-y-nb içinde "Web:" label ile birlikte
-                                    try:
-                                        nb_divs = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-nb")
-                                        for nb_div in nb_divs:
-                                            label_span = nb_div.find_elements(By.CSS_SELECTOR, "span.gwt-InlineLabel.EWP5KKC-y-mb")
-                                            if label_span and "Web:" in label_span[0].text.strip():
-                                                anchor = nb_div.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-y-C[itemprop='url']")
-                                                if anchor:
-                                                    website = anchor.get_attribute("href") if anchor else ""
-                                                    break
-                                    except Exception:
-                                        try:
-                                            website_elem = driver.find_element(By.CSS_SELECTOR, "[itemprop='url']")
-                                            website = website_elem.get_attribute("href") if website_elem else ""
-                                        except Exception:
-                                            pass
-
-                                    # Adres - streetAddress, postalCode, addressLocality, addressCountry
-                                    try:
-                                        address_div = driver.find_element(By.CSS_SELECTOR, "div.EWP5KKC-y-cc[itemprop='address']")
-                                        street_address_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='streetAddress'] div.gwt-Label.EWP5KKC-y-rb")
-                                        adres = street_address_elem.text.strip() if street_address_elem else ""
-                                        
-                                        postal_code_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='postalCode']")
-                                        posta_kodu = postal_code_elem.text.strip() if postal_code_elem else posta_kodu
-                                        
-                                        city_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='addressLocality']")
-                                        sehir = city_elem.text.strip() if city_elem else sehir
-                                        
-                                        country_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='addressCountry']")
-                                        ulke = country_elem.text.strip() if country_elem else ulke
-                                    except Exception:
-                                        try:
-                                            adres_elem = driver.find_element(By.CSS_SELECTOR, "[itemprop='streetAddress']")
-                                            adres = adres_elem.text.strip() if adres_elem else ""
-                                        except Exception:
-                                            pass
-
-                                    # Phone
-                                    try:
-                                        nb_divs = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-nb")
-                                        for nb_div in nb_divs:
-                                            label_div = nb_div.find_elements(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-y-mb")
-                                            if label_div and "Phone:" in label_div[0].text.strip():
-                                                phone_elem = nb_div.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-y-C[itemprop='telephone']")
-                                                if phone_elem:
-                                                    telefon = phone_elem.text.strip() if phone_elem else ""
-                                                    break
-                                    except Exception:
-                                        try:
-                                            telefon_elem = driver.find_element(By.CSS_SELECTOR, "[itemprop='telephone']")
-                                            telefon = telefon_elem.text.strip() if telefon_elem else ""
-                                        except Exception:
-                                            pass
-
-                                    # Email - spam korumalı olabilir (info<span>@</span>1atapes.de)
-                                    try:
-                                        nb_divs = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-nb")
-                                        for nb_div in nb_divs:
-                                            label_span = nb_div.find_elements(By.CSS_SELECTOR, "span.gwt-InlineLabel.EWP5KKC-y-mb")
-                                            if label_span and "Email:" in label_span[0].text.strip():
-                                                email_anchor = nb_div.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-y-C")
-                                                if email_anchor:
-                                                    email_html = email_anchor.get_attribute("innerHTML")
-                                                    if email_html:
-                                                        email = re.sub(r'<[^>]+>', '', email_html).strip()
-                                                    break
-                                    except Exception:
-                                        try:
-                                            email_elem = driver.find_element(By.CSS_SELECTOR, ".EWP5KKC-y-nb a.gwt-Anchor")
-                                            if email_elem:
-                                                email_html = email_elem.get_attribute("innerHTML")
-                                                if email_html:
-                                                    email = re.sub(r'<[^>]+>', '', email_html).strip()
-                                        except Exception:
-                                            pass
-                                     
-                                    if not email and website:
-                                        try:
-                                            print(f"     🔎 Website'den email aranıyor...")
-                                            email_list = site_icerisinden_email_bul(website)
-                                            if email_list and len(email_list) > 0:
-                                                for mail in email_list:
-                                                    if mail and "@" in mail:
-                                                        email = mail
-                                                        break
-                                        except Exception:
-                                            pass
-
-                                    driver.get(base_url)
-                                    time.sleep(2)
-
-                                except Exception as e:
-                                    print(f"    ⚠️ Detay işlenirken hata: {e}")
-                                    driver.get(base_url)
-                                    time.sleep(2)
-
-                        except Exception as e:
-                            print(f"    ⚠️ Detay navigasyon hatası: {e}")
-                            driver.get(base_url)
-                            time.sleep(2)
-
-                    print(f"  ✅ {firma_adi}")
-
-                    tablo.append({
-                        "Data Source/E_Exhibition": "LogiMAT 2026",
-                        "Product": urun_gruplari,
-                        "CompanyName": firma_adi,
-                        "CompanyWebsite": website,
-                        "CompanyMail": email,
-                        "CompanyMail2": "",
-                        "CompanyPhone": telefon,
-                        "CompanyAddress": adres,
-                        "CompanyZipCode": posta_kodu,
-                        "CompanyCity": sehir,
-                        "CompanyCountry": ulke,
-                        "Stand No": stand_no,
-                        "Detay Link": detay_link
-                    })
-
+                        # 4. Adım: Yeni içeriğin yüklenmesini bekle
+                        # Yükleme sonrası kart sayısının artmasını veya bir süre beklemeyi tercih edebiliriz.
+                        # Basitlik adına statik bekleme:
+                        time.sleep(4) 
+                    else:
+                        print("   ⚠️ Görünür 'Show More' butonu bulunamadı (Liste sonu olabilir).")
+                        break
+                        
                 except Exception as e:
-                    print(f"  ❌ Firma kartı işlenirken hata: {e}")
-                    continue
+                    print(f"   ❌ Show more döngüsünde hata: {e}")
+                    break
 
-        print(f"\n🔄 Show More butonuna basılıyor... ({show_more_count} kez)")
+        # --- Link Toplama ---
+        print("\n📋 Firma linkleri toplanıyor...")
+        # Önce tüm firma kartlarını bul
+        cards = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-w-J.EWP5KKC-w-U")
         
-        for show_more_num in range(show_more_count):
-            print(f"\n🔄 {show_more_num + 1}/{show_more_count}. Show More tıklanıyor...")
+        detail_links = []
+        for card in cards:
+            try:
+                # Kartın içindeki detay linkini al
+                link_elem = card.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-d-m[href*='#/detail/']")
+                url = link_elem.get_attribute("href")
+                
+                # Karttan ön-bilgileri al (Yedek olarak)
+                try:
+                    title = card.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-Q").text
+                except: title = "Bilinmiyor"
+                
+                detail_links.append({"url": url, "backup_name": title})
+            except:
+                continue
+
+        print(f"📊 Toplam {len(detail_links)} firma detayı gezilecek.")
+
+        # --- Detayları Gezme (Mevcut kodunuzdaki mantık korunmuştur) ---
+        main_window = driver.current_window_handle
+        
+        for idx, item in enumerate(detail_links, 1):
+            target_url = item['url']
+            firma_adi = item['backup_name']
+            
+            # Konsol kirliliğini önlemek için her 5 firmada bir veya hata durumunda yazdırabilirsiniz
+            print(f"➡️ {idx}/{len(detail_links)} İşleniyor: {firma_adi}")
             
             try:
-                show_more_button = None
+                driver.switch_to.new_window('tab')
+                driver.get(target_url)
+                
+                # Detay sayfası yükleme beklemesi
+                try:
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "[itemprop='legalName']"))
+                    )
+                except:
+                    pass
+
+                # --- Veri Çekme (Aynı seçiciler) ---
+                # 1. Firma Adı
+                try:
+                    firma_adi = driver.find_element(By.CSS_SELECTOR, "[itemprop='legalName']").text.strip()
+                except: pass
+
+                # 2. Adres
+                adres, posta_kodu, sehir, ulke = "", "", "", ""
+                try:
+                    address_cont = driver.find_element(By.CSS_SELECTOR, "[itemprop='address']")
+                    try: adres = address_cont.find_element(By.CSS_SELECTOR, "[itemprop='streetAddress']").text.strip()
+                    except: pass
+                    try: posta_kodu = address_cont.find_element(By.CSS_SELECTOR, "[itemprop='postalCode']").text.strip()
+                    except: pass
+                    try: sehir = address_cont.find_element(By.CSS_SELECTOR, "[itemprop='addressLocality']").text.strip()
+                    except: pass
+                    try: ulke = address_cont.find_element(By.CSS_SELECTOR, "[itemprop='addressCountry']").text.strip()
+                    except: pass
+                except: pass
+
+                # 3. İletişim
+                telefon, website, email = "", "", ""
+                try: telefon = driver.find_element(By.CSS_SELECTOR, "[itemprop='telephone']").text.strip()
+                except: pass
+                try: website = driver.find_element(By.CSS_SELECTOR, "a[itemprop='url']").get_attribute("href")
+                except: pass
                 
                 try:
-                    show_more_button = driver.find_element(By.CSS_SELECTOR, "div.EWP5KKC-u-a.EWP5KKC-u-d")
-                except Exception:
-                    pass
+                    email_links = driver.find_elements(By.XPATH, "//div[contains(@class, 'EWP5KKC-y-nb')]//a")
+                    for link in email_links:
+                        if "@" in link.get_attribute("textContent"):
+                            email = link.get_attribute("textContent").strip().replace('\u200b', '')
+                            break
+                except: pass
+
+                # 4. Ürün Grupları & Stand
+                urun_gruplari, stand_no = "", ""
+                try:
+                    cats = [c.text.strip() for c in driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-n .gwt-Label.EWP5KKC-y-H") if c.text.strip()]
+                    urun_gruplari = ", ".join([c for c in set(cats) if "Categories" not in c and "Product" not in c])
+                except: pass
                 
-                if not show_more_button:
-                    try:
-                        show_more_button = driver.find_element(By.XPATH, "//div[contains(text(), 'Show more')]")
-                    except Exception:
-                        pass
-                
-                if not show_more_button:
-                    try:
-                        container = driver.find_element(By.CSS_SELECTOR, "div.EWP5KKC-u-c")
-                        show_more_button = container.find_element(By.CSS_SELECTOR, "div.EWP5KKC-u-a")
-                    except Exception:
-                        pass
-                
-                if not show_more_button:
-                    print(f"  ⚠️ Show More butonu bulunamadı. İşlem durduruluyor.")
-                    break
-                
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(2)
-                
-                driver.execute_script("arguments[0].click();", show_more_button)
-                time.sleep(4)
-                
-                print(f"  ✅ Show More tıklandı")
-                
-                yeni_kartlar = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-w-J.EWP5KKC-w-U")
-                print(f"  📊 Toplam {len(yeni_kartlar)} kart (yeni: {len(yeni_kartlar) - len(firma_kartlari)})")
-                
-                for i in range(len(firma_kartlari), len(yeni_kartlar)):
-                    try:
-                        kart = yeni_kartlar[i]
-                        idx = i + 1
-                        
-                        firma_adi = ""
-                        try:
-                            label_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-Q")
-                            firma_adi = label_elem.get_attribute("title").strip() if label_elem else ""
-                        except Exception:
-                            try:
-                                label_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-Q")
-                                firma_adi = label_elem.text.strip() if label_elem else ""
-                            except Exception:
-                                pass
+                try:
+                    stand_text = driver.find_element(By.CSS_SELECTOR, "a[href*='#/hallplan/']").text.strip()
+                    stand_no = stand_text.split("|")[0].strip() if "|" in stand_text else stand_text
+                except: pass
 
-                        lokasyon = ""
-                        try:
-                            lokasyon_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-m")
-                            lokasyon = lokasyon_elem.get_attribute("title").strip() if lokasyon_elem else ""
-                        except Exception:
-                            pass
-
-                        posta_kodu = ""
-                        sehir = ""
-                        ulke = ""
-
-                        if lokasyon:
-                            parts = lokasyon.split(", ")
-                            if len(parts) >= 1:
-                                first_part = parts[0].strip()
-                                if first_part and first_part[0].isdigit():
-                                    parts_first = first_part.split(" ")
-                                    if len(parts_first) >= 2:
-                                        posta_kodu = parts_first[0].strip()
-                                        sehir = " ".join(parts_first[1:]).strip()
-                                    else:
-                                        sehir = first_part
-                                else:
-                                    sehir = first_part
-                            
-                            if len(parts) >= 2:
-                                ulke = parts[-1].strip()
-
-                        stand_no = ""
-                        try:
-                            stand_label_elem = kart.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-w-a")
-                            stand_text = stand_label_elem.text.strip() if stand_label_elem else ""
-                            if "Stand" in stand_text:
-                                stand_no = stand_text.split("Stand")[-1].strip()
-                            else:
-                                stand_no = stand_text
-                        except Exception:
-                            pass
-
-                        detay_link = ""
-                        try:
-                            detay_link_elem = kart.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-d-m")
-                            detay_link = detay_link_elem.get_attribute("href") if detay_link_elem else ""
-                        except Exception:
-                            pass
-
-                        website = ""
-                        email = ""
-                        telefon = ""
-                        adres = ""
-                        urun_gruplari = ""
-
-                        if detay_link and "#/detail/" in detay_link:
-                            if detay_link in seen_firma_links:
-                                print(f"  ⏭️  {firma_adi} - Zaten işlendi, atlanıyor...")
-                                continue
-                            
-                            seen_firma_links.add(detay_link)
-                            
-                            try:
-                                print(f"  {idx}/{len(yeni_kartlar)}. 🔍 {firma_adi} - Detay açılıyor...")
-                                
-                                current_url = driver.current_url.split('#')[0]
-                                full_detail_url = current_url + detay_link.split('#')[-1]
-                                driver.get(full_detail_url)
-                                time.sleep(3)
-                                
-                                try:
-                                    WebDriverWait(driver, 10).until(
-                                        EC.presence_of_element_located((By.CSS_SELECTOR, "[itemprop='legalName']"))
-                                    )
-                                except Exception:
-                                    print(f"    ⚠️ Detay modalı yüklenmedi")
-                                    driver.get(base_url)
-                                    time.sleep(2)
-                                else:
-                                    try:
-                                        # Product (Categories) - tüm kategorileri al
-                                        urun_gruplari = ""
-                                        try:
-                                            category_labels = driver.find_elements(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-y-H")
-                                            urun_ismi_listesi = []
-                                            for cat_label in category_labels:
-                                                cat_text = cat_label.text.strip() if cat_label else ""
-                                                if cat_text and cat_text != "Categories":
-                                                    urun_ismi_listesi.append(cat_text)
-                                            if urun_ismi_listesi:
-                                                urun_gruplari = ", ".join(urun_ismi_listesi)
-                                        except Exception:
-                                            pass
-
-                                        # Website - .EWP5KKC-y-nb içinde "Web:" label ile birlikte
-                                        try:
-                                            nb_divs = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-nb")
-                                            for nb_div in nb_divs:
-                                                label_span = nb_div.find_elements(By.CSS_SELECTOR, "span.gwt-InlineLabel.EWP5KKC-y-mb")
-                                                if label_span and "Web:" in label_span[0].text.strip():
-                                                    anchor = nb_div.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-y-C[itemprop='url']")
-                                                    if anchor:
-                                                        website = anchor.get_attribute("href") if anchor else ""
-                                                        break
-                                        except Exception:
-                                            try:
-                                                website_elem = driver.find_element(By.CSS_SELECTOR, "[itemprop='url']")
-                                                website = website_elem.get_attribute("href") if website_elem else ""
-                                            except Exception:
-                                                pass
-
-                                        # Adres - streetAddress, postalCode, addressLocality, addressCountry
-                                        try:
-                                            address_div = driver.find_element(By.CSS_SELECTOR, "div.EWP5KKC-y-cc[itemprop='address']")
-                                            street_address_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='streetAddress'] div.gwt-Label.EWP5KKC-y-rb")
-                                            adres = street_address_elem.text.strip() if street_address_elem else ""
-
-                                            postal_code_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='postalCode']")
-                                            posta_kodu = postal_code_elem.text.strip() if postal_code_elem else posta_kodu
-
-                                            city_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='addressLocality']")
-                                            sehir = city_elem.text.strip() if city_elem else sehir
-
-                                            country_elem = address_div.find_element(By.CSS_SELECTOR, "[itemprop='addressCountry']")
-                                            ulke = country_elem.text.strip() if country_elem else ulke
-                                        except Exception:
-                                            try:
-                                                adres_elem = driver.find_element(By.CSS_SELECTOR, "[itemprop='streetAddress']")
-                                                adres = adres_elem.text.strip() if adres_elem else ""
-                                            except Exception:
-                                                pass
-
-                                        # Phone
-                                        try:
-                                            nb_divs = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-nb")
-                                            for nb_div in nb_divs:
-                                                label_div = nb_div.find_elements(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-y-mb")
-                                                if label_div and "Phone:" in label_div[0].text.strip():
-                                                    phone_elem = nb_div.find_element(By.CSS_SELECTOR, "div.gwt-Label.EWP5KKC-y-C[itemprop='telephone']")
-                                                    if phone_elem:
-                                                        telefon = phone_elem.text.strip() if phone_elem else ""
-                                                        break
-                                        except Exception:
-                                            try:
-                                                telefon_elem = driver.find_element(By.CSS_SELECTOR, "[itemprop='telephone']")
-                                                telefon = telefon_elem.text.strip() if telefon_elem else ""
-                                            except Exception:
-                                                pass
-
-                                        # Email - spam korumalı olabilir (info<span>@</span>1atapes.de)
-                                        try:
-                                            nb_divs = driver.find_elements(By.CSS_SELECTOR, "div.EWP5KKC-y-nb")
-                                            for nb_div in nb_divs:
-                                                label_span = nb_div.find_elements(By.CSS_SELECTOR, "span.gwt-InlineLabel.EWP5KKC-y-mb")
-                                                if label_span and "Email:" in label_span[0].text.strip():
-                                                    email_anchor = nb_div.find_element(By.CSS_SELECTOR, "a.gwt-Anchor.EWP5KKC-y-C")
-                                                    if email_anchor:
-                                                        email_html = email_anchor.get_attribute("innerHTML")
-                                                        if email_html:
-                                                            email = re.sub(r'<[^>]+>', '', email_html).strip()
-                                                        break
-                                        except Exception:
-                                            try:
-                                                email_elem = driver.find_element(By.CSS_SELECTOR, ".EWP5KKC-y-nb a.gwt-Anchor")
-                                                if email_elem:
-                                                    email_html = email_elem.get_attribute("innerHTML")
-                                                    if email_html:
-                                                        email = re.sub(r'<[^>]+>', '', email_html).strip()
-                                            except Exception:
-                                                pass
-
-                                        if not email and website:
-                                            try:
-                                                print(f"     🔎 Website'den email aranıyor...")
-                                                email_list = site_icerisinden_email_bul(website)
-                                                if email_list and len(email_list) > 0:
-                                                    for mail in email_list:
-                                                        if mail and "@" in mail:
-                                                            email = mail
-                                                            break
-                                            except Exception:
-                                                pass
-
-                                        driver.get(base_url)
-                                        time.sleep(2)
-
-                                    except Exception as e:
-                                        print(f"    ⚠️ Detay işlenirken hata: {e}")
-                                        driver.get(base_url)
-                                        time.sleep(2)
-
-                            except Exception as e:
-                                print(f"    ⚠️ Detay navigasyon hatası: {e}")
-                                driver.get(base_url)
-                                time.sleep(2)
-
-                        print(f"  ✅ {firma_adi}")
-
-                        tablo.append({
-                            "Data Source/E_Exhibition": "LogiMAT 2026",
-                            "Product": urun_gruplari,
-                            "CompanyName": firma_adi,
-                            "CompanyWebsite": website,
-                            "CompanyMail": email,
-                            "CompanyMail2": "",
-                            "CompanyPhone": telefon,
-                            "CompanyAddress": adres,
-                            "CompanyZipCode": posta_kodu,
-                            "CompanyCity": sehir,
-                            "CompanyCountry": ulke,
-                            "Stand No": stand_no,
-                            "Detay Link": detay_link
-                        })
-
-                    except Exception as e:
-                        print(f"  ❌ Yeni kart işlenirken hata: {e}")
-                        continue
-                
-                firma_kartlari = yeni_kartlar
+                tablo.append({
+                    "Company Name": firma_adi,
+                    "Product Categories": urun_gruplari,
+                    "Email": email,
+                    "Phone": telefon,
+                    "Website": website,
+                    "Address": adres,
+                    "Zip Code": posta_kodu,
+                    "City": sehir,
+                    "Country": ulke,
+                    "Stand No": stand_no,
+                    "Detail Link": target_url
+                })
 
             except Exception as e:
-                print(f"  ⚠️ Show More işlenirken hata: {e}")
-                break
+                print(f"   ❌ Detay hatası: {str(e)}")
+            
+            finally:
+                driver.close()
+                driver.switch_to.window(main_window)
 
+    except Exception as main_e:
+        print(f"🚨 Genel Hata: {main_e}")
+        
     finally:
         driver.quit()
 
     df = pd.DataFrame(tablo)
-    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
-
+    print(f"\n🏁 İşlem Tamamlandı. Toplam {len(df)} firma çekildi.")
+    
+    # Streamlit entegrasyonu (varsa)
     if st:
-        st.dataframe(df)
-        
-        excel_buffer = io.BytesIO()
-        df.to_excel(excel_buffer, index=False, engine='openpyxl')
-        excel_buffer.seek(0)
-        st.download_button(
-            label="📥 Excel (.xlsx) İndir",
-            data=excel_buffer,
-            file_name=f"{st.session_state.get('function_name', 'logimat')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="📥 CSV İndir",
-            data=csv_buffer.getvalue(),
-            file_name=f"{st.session_state.get('function_name', 'logimat')}.csv",
-            mime="text/csv"
-        )
-        
-        if not df.empty and "CompanyCountry" in df.columns:
-            try:
-                ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
-                ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
-                fig = px.bar(ulke_sayilari.head(20), x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
-                st.plotly_chart(fig)
-            except Exception as e:
-                st.error(f"Grafik çizilirken hata: {e}")
-    else:
-        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
         if not df.empty:
-            print(f"Toplam firma: {len(df)}")
-            if "CompanyCountry" in df.columns:
-                print(df["CompanyCountry"].value_counts())
+            st.success(f"Başarıyla {len(df)} firma çekildi!")
+            st.dataframe(df)
+            
+            excel_buffer = io.BytesIO()
+            df.to_excel(excel_buffer, index=False, engine='openpyxl')
+            excel_buffer.seek(0)
+            st.download_button(label="📥 Excel İndir", data=excel_buffer, file_name="logimat_2026.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        else:
+            st.warning("Veri çekilemedi.")
             
     return df
