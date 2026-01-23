@@ -1421,23 +1421,39 @@ def scrape_ifat_exhibitors(load_more_count):
                 status_text.text(f"Clicking 'Load More': {i+1}/{load_more_count}")
                 progress_bar.progress((i+1) / load_more_count)
                 
-                try:
-                    # IFAT'ta Load More bir tablo satırı (tr.lazymore)
-                    load_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "tr.lazymore")))
-                    
-                    # Görünür yap ve tıkla
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", load_btn)
-                    time.sleep(1)
-                    driver.execute_script("arguments[0].click();", load_btn)
-                    
-                    # Yükleme beklemesi
-                    time.sleep(4) 
-                    
-                except TimeoutException:
-                    print(f"⚠️ Load More bitti ({i}. deneme).")
-                    break
-                except Exception as e:
-                    print(f"⚠️ Hata: {e}")
+                # 3 deneme mekanizması
+                button_clicked = False
+                for attempt in range(3):
+                    try:
+                        # IFAT'ta Load More bir tablo satırı (tr.lazymore)
+                        load_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "tr.lazymore")))
+                        
+                        # Görünür yap ve tıkla
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", load_btn)
+                        time.sleep(1)
+                        driver.execute_script("arguments[0].click();", load_btn)
+                        
+                        # Yükleme beklemesi
+                        time.sleep(4)
+                        button_clicked = True
+                        print(f"✅ Load More başarılı (Deneme {attempt + 1})")
+                        break
+                        
+                    except TimeoutException:
+                        if attempt < 2:  # Son deneme değilse
+                            print(f"⚠️ Load More bulunamadı, yeniden deneniyor... ({attempt + 1}/3)")
+                            time.sleep(1)
+                        else:
+                            print(f"⚠️ Load More bitti (3 deneme başarısız).")
+                    except Exception as e:
+                        if attempt < 2:
+                            print(f"⚠️ Hata: {e}, yeniden deneniyor... ({attempt + 1}/3)")
+                            time.sleep(1)
+                        else:
+                            print(f"⚠️ Load More hatası: {e}")
+                
+                # Hiçbir denemede başarılı olamadıysa döngüyü kır
+                if not button_clicked:
                     break
         
         # 5. Linkleri Topla
