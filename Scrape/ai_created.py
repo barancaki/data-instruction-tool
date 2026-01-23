@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-from Scrape.scrape import site_icerisinden_email_bul, bing_ilk_link_al, google_ilk_link_al, duckduckgo_search_selenium, extract_emails_from_source, find_email_advanced
+from Scrape.scrape import site_icerisinden_email_bul, bing_ilk_link_al, google_ilk_link_al, duckduckgo_search_selenium, extract_emails_from_source, find_email_advanced, handle_cookie_consent_final
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -1370,4 +1370,252 @@ def scrape_aquatherm_tashkent(page_limit):
     else:
         st.warning("No data found.")
 
+    return df
+
+def scrape_ifat_exhibitors(load_more_count):
+    
+    options = Options()
+    options.add_argument("--headless") # Test ederken kapalı kalsın
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    wait = WebDriverWait(driver, 20)
+    
+    base_url = "https://exhibitors.ifat.de/en/exhibitors-products/exhibitors-brands"
+    exhibitor_links = []
+    tablo = []
+    
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+
+    try:
+        # 1. Siteye Git
+        print(f"🔄 Ana sayfa yükleniyor: {base_url}")
+        status_text.text("Main page is loading...")
+        driver.get(base_url)
+        
+        # 2. Çerezleri Geç (YENİ FONKSİYON)
+        handle_cookie_consent_final(driver)
+        
+        # 3. Listenin Yüklenmesini Bekle
+        status_text.text("Waiting for list...")
+        try:
+            # IFAT sitesinde firmalar tablo satırlarında (tr.hitrow) gösteriliyor
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "tr.hitrow, div.treffer-titel, table.table tbody tr")))
+            print("✅ Liste yüklendi.")
+        except TimeoutException:
+            print("⚠️ Liste yüklenemedi. Sayfa yenilenip tekrar deneniyor...")
+            driver.refresh()
+            handle_cookie_consent_final(driver)
+            time.sleep(5)
+
+        # 4. Load More İşlemleri
+        if load_more_count > 0:
+            print(f"🔄 'Load more' satırına {load_more_count} kez basılacak...")
+            
+            for i in range(load_more_count):
+                status_text.text(f"Clicking 'Load More': {i+1}/{load_more_count}")
+                progress_bar.progress((i+1) / load_more_count)
+                
+                try:
+                    # IFAT'ta Load More bir tablo satırı (tr.lazymore)
+                    load_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "tr.lazymore")))
+                    
+                    # Görünür yap ve tıkla
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", load_btn)
+                    time.sleep(1)
+                    driver.execute_script("arguments[0].click();", load_btn)
+                    
+                    # Yükleme beklemesi
+                    time.sleep(4) 
+                    
+                except TimeoutException:
+                    print(f"⚠️ Load More bitti ({i}. deneme).")
+                    break
+                except Exception as e:
+                    print(f"⚠️ Hata: {e}")
+                    break
+        
+        # 5. Linkleri Topla
+        status_text.text("Collecting links...")
+        print("\n📋 Linkler toplanıyor...")
+        
+        # IFAT'ta firmalar tr.hitrow içinde, linkler div.treffer-titel a içinde
+        rows = driver.find_elements(By.CSS_SELECTOR, "tr.hitrow")
+        if not rows:
+            # Alternatif: Doğrudan exhibitorDetail linklerini bul
+            rows = driver.find_elements(By.CSS_SELECTOR, "a[href*='exhibitorDetail']")
+
+        for row in rows:
+            try:
+                # tr.hitrow içinden link al
+                if row.tag_name == "tr":
+                    link_elem = row.find_element(By.CSS_SELECTOR, "div.treffer-titel a, a[href*='exhibitorDetail']")
+                else:
+                    link_elem = row  # Doğrudan a elementi
+                    
+                url = link_elem.get_attribute("href")
+                name = link_elem.text.strip()
+                
+                if url and "exhibitorDetail" in url:
+                    if not any(d['url'] == url for d in exhibitor_links):
+                        exhibitor_links.append({"name": name if name else "Unknown", "url": url})
+            except:
+                continue
+
+        total_links = len(exhibitor_links)
+        print(f"📊 Toplam {total_links} firma bulundu.")
+        st.info(f"Total {total_links} exhibitors found.")
+        
+        # 6. Detayları Gez
+        progress_bar.progress(0)
+        main_window = driver.current_window_handle
+        
+        for idx, item in enumerate(exhibitor_links):
+            status_text.text(f"Scraping {idx+1}/{total_links}: {item['name']}")
+            progress_bar.progress((idx+1) / total_links)
+            
+            try:
+                driver.get(item['url'])
+                time.sleep(2)  # Sayfanın yüklenmesi için bekle
+                
+                # İsim
+                firma_adi = ""
+                try: 
+                    firma_adi = driver.find_element(By.CSS_SELECTOR, "div.contentblock_firma h1, h1").text.strip()
+                except: 
+                    firma_adi = item['name']
+                
+                # Adres bilgileri - exhibitordetails-locationinfo içinden
+                street_address = ""
+                zip_code = ""
+                city = ""
+                country = ""
+                full_address = ""
+                
+                try:
+                    address_block = driver.find_element(By.CSS_SELECTOR, "div.exhibitordetails-locationinfo p")
+                    address_html = address_block.get_attribute("innerHTML")
+                    # <br> ile ayrılmış satırları al
+                    address_lines = [line.strip() for line in address_html.replace("<br>", "\n").split("\n") if line.strip()]
+                    
+                    if len(address_lines) >= 1:
+                        street_address = address_lines[0]
+                    if len(address_lines) >= 2:
+                        # İkinci satır: "31855 Aerzen" formatında olabilir
+                        second_line = address_lines[1]
+                        parts = second_line.split(" ", 1)
+                        if len(parts) >= 1 and parts[0].isdigit():
+                            zip_code = parts[0]
+                            city = parts[1] if len(parts) > 1 else ""
+                        else:
+                            city = second_line
+                    if len(address_lines) >= 3:
+                        country = address_lines[2]
+                    
+                    full_address = ", ".join([l for l in address_lines if l])
+                except Exception as e:
+                    print(f"   Adres hatası: {e}")
+                
+                # Telefon - Contact info listesinden
+                phone = ""
+                try:
+                    contact_items = driver.find_elements(By.CSS_SELECTOR, "ul.exhibitordetails-contactinfo-list li")
+                    for item_li in contact_items:
+                        try:
+                            label = item_li.find_element(By.CSS_SELECTOR, "div:first-child").text.strip()
+                            if "Phone" in label:
+                                phone = item_li.find_element(By.CSS_SELECTOR, "div:last-child").text.strip()
+                                break
+                        except:
+                            continue
+                except Exception as e:
+                    print(f"   Telefon hatası: {e}")
+                
+                # E-mail - Contact info listesinden
+                email_from_site = ""
+                try:
+                    email_elem = driver.find_element(By.CSS_SELECTOR, "ul.exhibitordetails-contactinfo-list a[href^='mailto:']")
+                    email_from_site = email_elem.text.strip()
+                except:
+                    pass
+                
+                # Website - Contact info listesinden
+                website = ""
+                try:
+                    # Website linki: target="_blank" olan ve ifat.de içermeyen link
+                    website_elems = driver.find_elements(By.CSS_SELECTOR, "ul.exhibitordetails-contactinfo-list a[target='_blank']")
+                    for w_elem in website_elems:
+                        href = w_elem.get_attribute("href")
+                        if href and "ifat.de" not in href:
+                            website = href
+                            break
+                except:
+                    pass
+
+                # Ürün grupları - contentblock_nomen içindeki targetTag linklerinden
+                product_groups = ""
+                try:
+                    product_tags = driver.find_elements(By.CSS_SELECTOR, "div.contentblock_nomen div.targetTag a")
+                    product_list = list(set([p.text.strip() for p in product_tags if p.text.strip()]))
+                    product_groups = ", ".join(product_list)
+                except:
+                    pass
+
+                # Email arama (website varsa ve siteden email bulunamadıysa)
+                email = email_from_site
+                if website and not email:
+                    try:
+                        driver.switch_to.new_window('tab')
+                        email = find_email_advanced(driver, website)
+                        driver.close()
+                        driver.switch_to.window(main_window)
+                    except:
+                        if len(driver.window_handles) > 1:
+                            driver.close()
+                            driver.switch_to.window(main_window)
+
+                tablo.append({
+                    "Data Source": "IFAT Munich 2026",
+                    "ExhibitionProductGroup": product_groups,
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": website,
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": phone,
+                    "CompanyAddress": street_address,
+                    "CompanyZipCode": zip_code,
+                    "CompanyCity": city,
+                    "CompanyCountry": country,
+                    "CompanyBusinessType": "",
+                    "DetailUrl": item['url']
+                })
+
+            except Exception as e:
+                print(f"Hata ({item['name']}): {e}")
+                continue
+
+    except Exception as main_e:
+        print(f"Genel Hata: {main_e}")
+        st.error(str(main_e))
+        
+    finally:
+        driver.quit()
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    
+    if not df.empty:
+        st.success(f"Tamamlandı! {len(df)} firma çekildi.")
+        st.dataframe(df)
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button("📥 Excel İndir", data=excel_buffer, file_name="ifat_exhibitors.xlsx")
+        
     return df

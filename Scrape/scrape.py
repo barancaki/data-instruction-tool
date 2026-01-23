@@ -312,3 +312,61 @@ def find_email_advanced(driver, url):
     except Exception as e:
         print(f"❌ Genel email tarama hatası: {e}")
         return ""
+    
+def handle_cookie_consent_final(driver):
+    """
+    Usercentrics Shadow DOM engelini aşar ve çerez onay butonuna tıklar.
+    IFAT sitesi için güncellenmiş versiyon - usercentrics-cmp-ui elementi kullanılıyor.
+    """
+    print("🍪 Çerez popup'ı aranıyor...")
+    
+    # Maksimum 20 saniye boyunca popup'ın oluşmasını bekle
+    end_time = time.time() + 20
+    
+    while time.time() < end_time:
+        try:
+            # Bu Javascript kodu doğrudan tarayıcının içinde çalışır ve Shadow DOM duvarını deler.
+            result = driver.execute_script("""
+                // Usercentrics CMP UI elementini bul (aside#usercentrics-cmp-ui)
+                var host = document.querySelector('#usercentrics-cmp-ui');
+                if (!host) {
+                    // Alternatif: eski host adı
+                    host = document.querySelector('#usercentrics-root');
+                }
+                if (!host) return "Host bulunamadı";
+                
+                // Shadow Root içine gir
+                var shadow = host.shadowRoot;
+                if (!shadow) return "Shadow Root henüz oluşmadı";
+                
+                // Butonları sırayla dene: deny (reddet), save, accept
+                // deny butonu en az izleme için idealdir
+                var btn = shadow.querySelector('button.deny');
+                if (!btn) btn = shadow.querySelector('button.save');
+                if (!btn) btn = shadow.querySelector('button.accept');
+                if (!btn) btn = shadow.querySelector('[data-testid="uc-deny-all-button"]');
+                if (!btn) btn = shadow.querySelector('[data-testid="uc-save-button"]');
+                if (!btn) btn = shadow.querySelector('[data-testid="uc-accept-all-button"]');
+                
+                if (btn) {
+                    btn.click();
+                    return "SUCCESS";
+                }
+                
+                return "Buton bulunamadı";
+            """)
+            
+            if result == "SUCCESS":
+                print("✅ Çerez butonuna başarıyla tıklandı.")
+                time.sleep(3) # Popup'ın kapanması ve listenin yüklenmesi için bekle
+                return True
+            else:
+                print(f"   ➡️ {result}, tekrar deneniyor...")
+                
+        except Exception as e:
+            pass # Hata olursa (örn: JS yüklenmediyse) döngü devam etsin
+            
+        time.sleep(1) # Her saniye tekrar dene
+        
+    print("⚠️ Çerez butonu 20 saniye içinde tıklanamadı (Otomatik geçiliyor).")
+    return False
