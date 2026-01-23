@@ -14,6 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 
 def scrape_advanced_engineering(sayfa_sayisi):
@@ -1180,5 +1181,193 @@ def scrape_acrex_india():
             file_name="acrex_india_results.csv",
             mime="text/csv"
         )
+
+    return df
+
+def scrape_aquatherm_tashkent(page_limit):
+    """
+    Aquatherm Tashkent - Sayfa limitli ve otomatik sonlanan scraper.
+    """
+    
+    # --- Tarayıcı Ayarları ---
+    options = Options()
+    options.add_argument("--headless") # Hata ayıklarken kapalı tutun
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    wait = WebDriverWait(driver, 15)
+    
+    base_url = "https://aquatherm-tashkent.uz/en/exhibitors-list/year/454"
+    tablo = []
+    
+    # Streamlit Progress Bar (Opsiyonel görselleştirme)
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    try:
+        print(f"🔄 Ana sayfa yükleniyor: {base_url}")
+        driver.get(base_url)
+        
+        # Tablonun yüklenmesini bekle
+        wait.until(EC.presence_of_element_located((By.ID, "ERADataTable")))
+        time.sleep(3)
+
+        current_page = 1
+        
+        # Döngü: Kullanıcı limiti VEYA sayfa sonu gelene kadar
+        while current_page <= page_limit:
+            status_text.text(f"Processing Page {current_page}/{page_limit}...")
+            print(f"\n📄 Sayfa {current_page} işleniyor...")
+            
+            # --- Satırları Bul ve İşle ---
+            rows = driver.find_elements(By.CSS_SELECTOR, "#ERADataTable tbody tr")
+            row_count = len(rows)
+            
+            for i in range(row_count):
+                try:
+                    # Stale Element hatasını önlemek için listeyi tazeleyin
+                    rows = driver.find_elements(By.CSS_SELECTOR, "#ERADataTable tbody tr")
+                    if i >= len(rows): break
+                    
+                    row = rows[i]
+                    cols = row.find_elements(By.TAG_NAME, "td")
+                    country = cols[1].text.strip() if len(cols) > 1 else ""
+                    
+                    # Modal Tetikleyici
+                    trigger_div = row.find_element(By.CSS_SELECTOR, "div[data-bs-toggle='modal']")
+                    company_name = trigger_div.text.strip()
+                    print(f"➡️  Firma: {company_name}")
+
+                    # Modalı Aç
+                    driver.execute_script("arguments[0].click();", trigger_div)
+                    
+                    # Modalın yüklenmesini bekle
+                    modal_content = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".modal.show .modal-content")))
+                    time.sleep(0.5) 
+
+                    # Verileri Çek
+                    website = ""
+                    product_categories = ""
+                    
+                    try:
+                        # Website
+                        try:
+                            website_elem = modal_content.find_element(By.XPATH, ".//b[contains(text(),'Website')]/parent::div/following-sibling::div[1]/a")
+                            website = website_elem.get_attribute("href")
+                        except:
+                            pass # Bulunamazsa boş kalsın
+                        
+                        # Kategoriler
+                        try:
+                            body_text = modal_content.find_element(By.CLASS_NAME, "modal-body").text
+                            if "Product Categories:" in body_text:
+                                parts = body_text.split("Product Categories:")
+                                if len(parts) > 1:
+                                    product_categories = parts[1].split("\n")[0].strip() or parts[1].split("\n")[1].strip()
+                        except: pass
+
+                    except Exception: pass
+
+                    # Email Bulma (Yeni Sekmede)
+                    email = ""
+                    if website:
+                        main_window = driver.current_window_handle
+                        driver.switch_to.new_window('tab')
+                        # NOT: find_email_advanced global fonksiyon olarak tanımlı olmalı
+                        email = find_email_advanced(driver, website) 
+                        driver.close()
+                        driver.switch_to.window(main_window)
+                    
+                    # Tabloya Ekle
+                    tablo.append({
+                        "Data Source": "Aquatherm Tashkent Exhibitors List",
+                        "ExhibitionName": "Aquatherm Tashkent 2025",
+                        "ExhibitionProductGroup": product_categories,
+                        "CompanyName": company_name,
+                        "CompanyWebsite": website,
+                        "CompanyMail": email,
+                        "CompanyMail2": "",
+                        "CompanyPhone": "", 
+                        "CompanyAddress": "", 
+                        "CompanyZipCode": "",
+                        "CompanyCity": "",
+                        "CompanyCountry": country,
+                        "CompanyBusinessType": ""
+                    })
+
+                    # Modalı Kapat
+                    try:
+                        close_btn = modal_content.find_element(By.CSS_SELECTOR, "button.btn-close")
+                        driver.execute_script("arguments[0].click();", close_btn)
+                        wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, ".modal-backdrop")))
+                    except:
+                        webdriver.ActionChains(driver).send_keys(webdriver.Keys.ESCAPE).perform()
+                        time.sleep(1)
+
+                except Exception as e:
+                    print(f"   ❌ Satır hatası: {e}")
+                    webdriver.ActionChains(driver).send_keys(webdriver.Keys.ESCAPE).perform()
+                    continue
+
+            # Progress Bar Güncelle
+            progress_bar.progress(min(current_page / page_limit, 1.0))
+
+            # --- Sayfalama Kontrolü (Burası Otomatik Kapanmayı Sağlar) ---
+            if current_page >= page_limit:
+                print("🛑 Kullanıcı limitine ulaşıldı.")
+                break
+            
+            try:
+                # Next butonu kontrolü
+                next_btn = driver.find_element(By.ID, "ERADataTable_next")
+                
+                # Eğer class'ında "disabled" varsa liste bitmiştir -> DÖNGÜYÜ KIR
+                if "disabled" in next_btn.get_attribute("class"):
+                    print("🏁 Liste sonuna gelindi (Next butonu pasif).")
+                    break
+                
+                # Sonraki sayfaya tıkla
+                driver.execute_script("arguments[0].scrollIntoView();", next_btn)
+                driver.execute_script("arguments[0].click();", next_btn)
+                time.sleep(3) # Sayfa yüklenmesi için bekle
+                current_page += 1
+                
+            except NoSuchElementException:
+                print("⚠️ Pagination butonu bulunamadı, işlem bitiriliyor.")
+                break
+
+    except Exception as main_e:
+        print(f"🚨 Genel Hata: {main_e}")
+        st.error(f"Bir hata oluştu: {main_e}")
+        
+    finally:
+        driver.quit()
+        status_text.empty()
+        progress_bar.empty()
+
+    # Sonuçları Döndür
+    df = pd.DataFrame(tablo)
+    
+    # Otomatik İndirme Butonu Oluşturma
+    if not df.empty:
+        st.success(f"Successfully scraped {len(df)} companies!")
+        st.dataframe(df)
+        
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            label="📥 Download Excel Result",
+            data=excel_buffer,
+            file_name="aquatherm_tashkent_results.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("No data found.")
 
     return df

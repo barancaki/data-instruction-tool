@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
 from Scrape.a_sablon import scrape_enosad_proses_all_members,scrape_enosad_fabrika_all_members,scrape_enosad_robotik_all_members,scrape_enosad_sanayi_all_members,scrape_roboder_all_members
@@ -282,5 +282,21 @@ if url in ["https://acrex.in/ExhibitorList-2026"]:
             else:
                 st.warning("Scraping already in progress...")
         st.success("The scan is complete!")
+
+if "aquatherm-tashkent.uz" in url:
+    st.info("Target: Aquatherm Tashkent Exhibitor List")
+    
+    # Kullanıcıdan sayfa sayısı alma
+    page_count_input = st.text_input("How many pages do you want to scan?", value="5")
+    
+    if page_count_input:
+        if st.button("Start Scan"):
+            with st.spinner("Scanning pages and extracting emails..."):
+                st.session_state['function_name'] = 'aquatherm'
+                
+                # Fonksiyonu çağır (Tam sayıya çevirmeyi unutma)
+                scrape_aquatherm_tashkent(int(page_count_input))
+            
+            st.balloons() # İşlem bitince konfeti (Opsiyonel)
 
 st.text('© Baran Çakı 2025')
