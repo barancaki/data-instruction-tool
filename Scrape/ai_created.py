@@ -1635,3 +1635,4 @@ def scrape_ifat_exhibitors(load_more_count):
         st.download_button("📥 Excel İndir", data=excel_buffer, file_name="ifat_exhibitors.xlsx")
         
     return df
+
