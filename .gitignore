@@ -16,3 +16,4 @@ table_to_sql.cpython-313.pyc
 venv
 *.pyc
 .vscode/
+.venv/
