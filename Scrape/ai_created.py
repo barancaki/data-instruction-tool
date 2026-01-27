@@ -1636,3 +1636,177 @@ def scrape_ifat_exhibitors(load_more_count):
         
     return df
 
+def scrape_ahri_members():
+    """
+    AHRI Members scraping function.
+    https://www.ahrinet.org/get-involved/ahri-members
+    """
+    options = Options()
+    # "headless=new" is more stable for recent Chrome versions
+    options.add_argument("--headless=new") 
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    # Trying without explicit ChromeDriverManager first, letting Selenium Manager handle it if available
+    try:
+        driver = webdriver.Chrome(service=Service(), options=options)
+    except:
+        # Fallback to ChromeDriverManager if default fails
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://www.ahrinet.org/get-involved/ahri-members"
+    tablo = []
+
+    try:
+        print(f"🔄 AHRI Members sayfası yükleniyor...")
+        driver.get(base_url)
+        time.sleep(5)
+
+        member_types = [
+            ("Full Members", "Full Member"),
+            ("International Members", "International Member"),
+            ("Affiliate Members", "Affiliate Member")
+        ]
+
+        for link_text, group_name in member_types:
+            try:
+                print(f"📂 {link_text} açılıyor...")
+                
+                # Başlık elementini bul (div içinde a tagi)
+                # XPath: //div[contains(@class, 'coh-accordion-title')]//a[contains(text(), 'Full Members')]
+                try:
+                    accordion_link = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, f"//div[contains(@class, 'coh-accordion-title')]//a[contains(text(), '{link_text}')]"))
+                    )
+                except TimeoutException:
+                     print(f"⚠️ {link_text} başlığı bulunamadı.")
+                     continue
+
+                # Eğer zaten açık değilse tıkla (aria-expanded kontrolü)
+                is_expanded = accordion_link.get_attribute("aria-expanded")
+                if is_expanded != "true":
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", accordion_link)
+                    time.sleep(1)
+                    driver.execute_script("arguments[0].click();", accordion_link)
+                    time.sleep(2)
+                else:
+                    print(f"   ℹ️ {link_text} zaten açık.")
+
+                # İçerik div'ini bul
+                # href="#id" şeklindedir
+                href = accordion_link.get_attribute("href")
+                if href and "#" in href:
+                    content_id = href.split("#")[-1]
+                    
+                    try:
+                        # İçeriğin görünür olmasını bekle
+                        content_div = WebDriverWait(driver, 10).until(
+                            EC.visibility_of_element_located((By.ID, content_id))
+                        )
+                    except TimeoutException:
+                        print(f"⚠️ {link_text} içeriği görünür olmadı, DOM'dan çekiliyor...")
+                        content_div = driver.find_element(By.ID, content_id)
+                    
+                    # Firmaları bul
+                    links = content_div.find_elements(By.TAG_NAME, "a")
+                    print(f"📊 {len(links)} firma bulundu")
+
+                    for link in links:
+                        try:
+                            name = link.text.strip()
+                            website = link.get_attribute("href")
+                            
+                            if not name or not website or website.startswith("#") or "ahrinet.org" in website:
+                                continue
+                            
+                            # Email arama - Gelişmiş Yöntem (Yeni Tab)
+                            email = ""
+                            try:
+                                # Ana pencereyi kaydet
+                                main_window = driver.current_window_handle
+                                
+                                # Yeni sekme aç
+                                driver.switch_to.new_window('tab')
+                                
+                                # Gelişmiş email arama fonksiyonunu çağır
+                                # Not: find_email_advanced içinde driver.get(url) yapılıyor
+                                email = find_email_advanced(driver, website)
+                                
+                                # Sekmeyi kapat ve ana pencereye dön
+                                driver.close()
+                                driver.switch_to.window(main_window)
+                                
+                            except Exception as email_e:
+                                print(f"     ❌ Email arama hatası ({name}): {email_e}")
+                                # Hata durumunda pencere kontrolü yap
+                                try:
+                                    if len(driver.window_handles) > 1:
+                                        driver.close()
+                                    driver.switch_to.window(main_window)
+                                except:
+                                    pass
+
+                            tablo.append({
+                                "Data Source/ExhibitionName": "AHRI Members",
+                                "ExhibitionProductGroup": group_name,
+                                "CompanyName": name,
+                                "CompanyWebsite": website,
+                                "CompanyMail": email,
+                                "CompanyMail2": "",
+                                "CompanyPhone": "",
+                                "CompanyAddress": "",
+                                "CompanyZipCode": "",
+                                "CompanyCity": "",
+                                "CompanyCountry": "",
+                                "CompanyBusinessType": ""
+                            })
+                        except Exception as inner_e:
+                            continue
+
+                else:
+                    print(f"⚠️ {link_text} için ID bulunamadı.")
+                    continue
+
+            except Exception as e:
+                print(f"  ❌ {link_text} işlenirken hata: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Excel (.xlsx) İndir",
+            data=excel_buffer,
+            file_name=f"ahri_members.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"ahri_members.csv",
+            mime="text/csv"
+        )
+            
+    return df
+
