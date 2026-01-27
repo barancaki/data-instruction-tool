@@ -17,3 +17,4 @@ venv
 *.pyc
 .vscode/
 .venv/
+new_function_pages/
