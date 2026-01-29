@@ -1810,3 +1810,214 @@ def scrape_ahri_members():
             
     return df
 
+def scrape_warsaw_hvac_expo(load_more_count):
+    """
+    Warsaw HVAC Expo Exhibitors Scraper
+    https://warsawhvacexpo.com/en/exhibitors-catalog/
+    Uses pagination via 'Load More' button
+    """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://warsawhvacexpo.com/en/exhibitors-catalog/"
+    tablo = []
+
+    try:
+        print(f"🔄 Ana sayfa yükleniyor...")
+        driver.get(base_url)
+        time.sleep(4)
+
+        # Load More butonuna tıklama döngüsü
+        if load_more_count > 0:
+            print(f"\n🔄 'Load More' butonuna {load_more_count} kez basılacak...")
+            
+            for i in range(load_more_count):
+                try:
+                    # Sayfanın en altına kaydır
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(1)
+                    
+                    # Load More butonunu bul
+                    try:
+                        load_more_btn = WebDriverWait(driver, 10).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, "a.exhibitor-catalog__pagination-btn"))
+                        )
+                        
+                        # Butonu görünür alana getir
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", load_more_btn)
+                        time.sleep(0.5)
+                        
+                        # Butona tıkla
+                        driver.execute_script("arguments[0].click();", load_more_btn)
+                        print(f"  ✅ {i+1}/{load_more_count} 'Load More' tıklandı")
+                        time.sleep(3)  # Yeni içeriğin yüklenmesi için bekle
+                        
+                    except TimeoutException:
+                        print(f"  ⚠️ 'Load More' butonu bulunamadı, tüm firmalar yüklenmiş olabilir.")
+                        break
+                        
+                except Exception as e:
+                    print(f"  ❌ Load More tıklanırken hata: {e}")
+                    break
+
+        print(f"\n✅ Tüm içerik yüklendi. Firma kartları toplanıyor...")
+
+        # Firma kartlarını bul
+        firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.exhibitor-catalog__exh-card")
+        
+        if not firma_kartlari:
+            print(f"⚠️ Firma bulunamadı.")
+        else:
+            print(f"📊 {len(firma_kartlari)} firma bulundu")
+
+            # Her firma kartından bilgileri çek
+            for idx, kart in enumerate(firma_kartlari, 1):
+                try:
+                    # Firma adı
+                    firma_adi = ""
+                    try:
+                        firma_adi_elem = kart.find_element(By.CSS_SELECTOR, "h3.exhibitor-catalog__exh-card-title")
+                        firma_adi = firma_adi_elem.text.strip()
+                    except:
+                        firma_adi = ""
+                    
+                    # Website
+                    website = ""
+                    try:
+                        contact_links = kart.find_elements(By.CSS_SELECTOR, "a.exhibitor-catalog__exh-card-info-contanct-single")
+                        for link in contact_links:
+                            link_text = link.find_element(By.CSS_SELECTOR, "p.exhibitor-catalog__exh-card-info-contanct-single-text").text.strip().lower()
+                            if "website" in link_text:
+                                website = link.get_attribute("href")
+                                break
+                    except:
+                        website = ""
+                    
+                    # Email
+                    email = ""
+                    try:
+                        contact_links = kart.find_elements(By.CSS_SELECTOR, "a.exhibitor-catalog__exh-card-info-contanct-single")
+                        for link in contact_links:
+                            href = link.get_attribute("href")
+                            if href and href.startswith("mailto:"):
+                                email = href.replace("mailto:", "").split("?")[0].strip()
+                                break
+                    except:
+                        email = ""
+                    
+                    # Telefon
+                    telefon = ""
+                    try:
+                        contact_links = kart.find_elements(By.CSS_SELECTOR, "a.exhibitor-catalog__exh-card-info-contanct-single")
+                        for link in contact_links:
+                            href = link.get_attribute("href")
+                            if href and href.startswith("tel:"):
+                                telefon = href.replace("tel:", "").strip()
+                                break
+                    except:
+                        telefon = ""
+                    
+                    # Stand numarası
+                    stand_no = ""
+                    try:
+                        stand_elem = kart.find_element(By.CSS_SELECTOR, "p.exhibitor-catalog__exh-card-info-stand-number")
+                        stand_no = stand_elem.text.strip()
+                    except:
+                        stand_no = ""
+                    
+                    # Ürün grupları / Brands
+                    urun_gruplari = ""
+                    try:
+                        brand_elems = kart.find_elements(By.CSS_SELECTOR, "p.exhibitor-catalog__exh-card-brand-single")
+                        urun_gruplari = ", ".join([b.text.strip() for b in brand_elems if b.text.strip()])
+                    except:
+                        urun_gruplari = ""
+                    
+                    # Email yoksa website'den bulmayı dene
+                    if not email and website:
+                        try:
+                            print(f"  {idx}/{len(firma_kartlari)}. 🔎 {firma_adi} - Website'den email aranıyor...")
+                            email_list = site_icerisinden_email_bul(website)
+                            if email_list and len(email_list) > 0:
+                                for mail in email_list:
+                                    if mail and "@" in mail:
+                                        email = mail
+                                        break
+                        except:
+                            pass
+
+                    print(f"  ✅ {idx}/{len(firma_kartlari)} - {firma_adi}")
+
+                    tablo.append({
+                        "Data Source/ExhibitionName": "Warsaw HVAC Expo",
+                        "ExhibitionProductGroup": urun_gruplari,
+                        "CompanyName": firma_adi,
+                        "CompanyWebsite": website,
+                        "CompanyMail": email,
+                        "CompanyMail2": "",
+                        "CompanyPhone": telefon,
+                        "CompanyAddress": "",
+                        "CompanyZipCode": "",
+                        "CompanyCity": "",
+                        "CompanyCountry": "Poland",
+                        "CompanyBusinessType": "",
+                        "Stand No": stand_no
+                    })
+
+                except Exception as e:
+                    print(f"  ❌ Firma bilgisi işlenirken hata: {e}")
+                    continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # !!! TÜM YENİ FONKSİYONLAR BU BLOĞU İÇERMELİ !!!
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        try:
+            excel_buffer = io.BytesIO()
+            df.to_excel(excel_buffer, index=False, engine='openpyxl')
+            excel_buffer.seek(0)
+            st.download_button(
+                label="📥 Excel (.xlsx) İndir",
+                data=excel_buffer,
+                file_name=f"{st.session_state.get('function_name', 'warsaw_hvac_expo')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except ImportError:
+            st.warning("⚠️ Excel (.xlsx) indirme için 'openpyxl' modülü gerekli. Lütfen `pip install openpyxl` komutunu çalıştırın.")
+        except Exception as e:
+            st.error(f"❌ Excel oluşturulurken hata: {e}")
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'warsaw_hvac_expo')}.csv",
+            mime="text/csv"
+        )
+        
+        # İstatistikler
+        if not df.empty:
+            st.info(f"📊 Toplam {len(df)} firma bilgisi çekildi.")
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty:
+            print(f"Toplam firma: {len(df)}")
+            
+    return df
+
