@@ -2223,3 +2223,164 @@ def scrape_ptc_asia(page_count):
             
     return df
 
+def scrape_mca_world_fair():
+    """
+    MCA World Fair Exhibitors Scraper
+    https://www.mcaworldfair.com/katilimcilar/
+    Extracts company name from img alt and website from href.
+    Scrapes company websites for emails.
+    """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://www.mcaworldfair.com/katilimcilar/"
+    tablo = []
+
+    try:
+        print(f"🔄 Ana sayfa yükleniyor: {base_url}")
+        driver.get(base_url)
+        time.sleep(5)
+
+        # Firma kutularını bul
+        zoom_boxes = driver.find_elements(By.CSS_SELECTOR, "div.zoom_box")
+        
+        if not zoom_boxes:
+            print("⚠️ Hiç firma kutusu bulunamadı.")
+            # Belki farklı bir selector lazımdır (Örn: .column_zoom_box)
+            zoom_boxes = driver.find_elements(By.CSS_SELECTOR, ".column_zoom_box")
+            
+        print(f"📊 {len(zoom_boxes)} firma kutusu bulundu.")
+
+        temp_data = []
+        for box in zoom_boxes:
+            try:
+                link_elem = box.find_element(By.TAG_NAME, "a")
+                website = link_elem.get_attribute("href")
+                
+                img_elem = link_elem.find_element(By.TAG_NAME, "img")
+                alt_text = img_elem.get_attribute("alt")
+                
+                # Firma adını temizle
+                # "AKSFLOW LOGO" -> "AKSFLOW"
+                # "mca-logo-auma" -> "AUMA"
+                # "ege-endustriyel" -> "EGE ENDUSTRIYEL"
+                
+                firma_adi = alt_text
+                if firma_adi:
+                    # Bilinen kalıpları çıkar
+                    firma_adi = firma_adi.replace("LOGO", "").replace("logo", "").replace("mca-", "").replace("MCA-", "")
+                    # Tireleri boşluğa çevir
+                    firma_adi = firma_adi.replace("-", " ")
+                    # Gereksiz boşlukları temizle ve büyük harf yap
+                    firma_adi = " ".join(firma_adi.split()).upper()
+                
+                if not firma_adi and website:
+                    # Eğer alt text yoksa linkten çıkarmayı dene
+                    domain = website.split("//")[-1].split("/")[0]
+                    firma_adi = domain.split(".")[0].upper()
+
+                temp_data.append({
+                    "firma_adi": firma_adi,
+                    "website": website
+                })
+            except Exception as e:
+                continue
+
+        print(f"🔗 {len(temp_data)} firma bilgisi işlenmek üzere hazırlandı.")
+
+        # Her firma için email ara
+        for idx, item in enumerate(temp_data, 1):
+            try:
+                firma_adi = item["firma_adi"]
+                website = item["website"]
+                email = ""
+                
+                print(f"  {idx}/{len(temp_data)}. 🔎 {firma_adi} - Website'den email aranıyor: {website}")
+                
+                if website and "mcaworldfair.com" not in website: # Kendi sitelerini taramasın
+                    try:
+                        email_list = site_icerisinden_email_bul(website)
+                        if email_list and len(email_list) > 0:
+                            # Geçerli bir email seç
+                            for mail in email_list:
+                                if mail and "@" in mail and "." in mail:
+                                    email = mail
+                                    break
+                    except:
+                        pass
+                
+                tablo.append({
+                    "Data Source/ExhibitionName": "MCA World Fair",
+                    "ExhibitionProductGroup": "",
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": website,
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": "",
+                    "CompanyAddress": "",
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": "Turkey",
+                    "CompanyBusinessType": "",
+                    "Stand No": ""
+                })
+                
+                print(f"    ✅ Tamamlandı: {email if email else 'Email bulunamadı'}")
+
+            except Exception as e:
+                print(f"    ❌ Hata: {e}")
+                continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # !!! TÜM YENİ FONKSİYONLAR BU BLOĞU İÇERMELİ !!!
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        try:
+            excel_buffer = io.BytesIO()
+            df.to_excel(excel_buffer, index=False, engine='openpyxl')
+            excel_buffer.seek(0)
+            st.download_button(
+                label="📥 Excel (.xlsx) İndir",
+                data=excel_buffer,
+                file_name=f"{st.session_state.get('function_name', 'mca_world_fair')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except ImportError:
+            st.warning("⚠️ Excel (.xlsx) indirme için 'openpyxl' modülü gerekli. Lütfen `pip install openpyxl` komutunu çalıştırın.")
+        except Exception as e:
+            st.error(f"❌ Excel oluşturulurken hata: {e}")
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'mca_world_fair')}.csv",
+            mime="text/csv"
+        )
+        
+        # İstatistikler
+        if not df.empty:
+            st.info(f"📊 Toplam {len(df)} firma bilgisi çekildi.")
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty:
+            print(f"Toplam firma: {len(df)}")
+            
+    return df
+
