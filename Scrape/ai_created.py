@@ -2021,3 +2021,205 @@ def scrape_warsaw_hvac_expo(load_more_count):
             
     return df
 
+def scrape_ptc_asia(page_count):
+    """
+    PTC Asia (Power Transmission and Control) Exhibitors Scraper
+    https://service.ptc-asia.com/VSCENTER2/visitor/PTC25/match/exhibitor?lang=en-US&page=1
+    Uses URL-based pagination
+    """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://service.ptc-asia.com/VSCENTER2/visitor/PTC25/match/exhibitor?lang=en-US&page="
+    tablo = []
+
+    try:
+        # Sayfa sayfa dolaş
+        for page in range(1, page_count + 1):
+            print(f"\n🔄 Sayfa {page}/{page_count} yükleniyor...")
+            driver.get(f"{base_url}{page}")
+            time.sleep(3)
+
+            # Firma kartlarını bul
+            firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.exh-list-item")
+            
+            if not firma_kartlari:
+                print(f"⚠️ Sayfa {page}'de firma bulunamadı, tarama sonlandırılıyor.")
+                break
+            else:
+                print(f"📊 Sayfa {page}'de {len(firma_kartlari)} firma bulundu")
+
+            # Her firma için detay linklerini topla
+            detay_linkleri = []
+            for kart in firma_kartlari:
+                try:
+                    # Firma adını ve detay linkini al
+                    firma_link_elem = kart.find_element(By.CSS_SELECTOR, "div.exh-list-title a")
+                    firma_adi = firma_link_elem.text.strip()
+                    detay_link = firma_link_elem.get_attribute("href")
+                    
+                    # Hall ve Stand bilgisini al
+                    hall = ""
+                    stand = ""
+                    try:
+                        text_spans = kart.find_elements(By.CSS_SELECTOR, "div.exh-list-text-span")
+                        for span in text_spans:
+                            span_text = span.text
+                            if "Hall:" in span_text:
+                                hall = span.find_element(By.TAG_NAME, "span").text.strip()
+                            elif "Stand:" in span_text:
+                                stand = span.find_element(By.TAG_NAME, "span").text.strip()
+                    except:
+                        pass
+                    
+                    detay_linkleri.append({
+                        "firma_adi": firma_adi,
+                        "detay_link": detay_link,
+                        "hall": hall,
+                        "stand": stand
+                    })
+                except Exception as e:
+                    print(f"  ❌ Firma linki alınırken hata: {e}")
+                    continue
+
+            # Her firma detay sayfasına git ve iletişim bilgilerini al
+            for idx, firma_bilgi in enumerate(detay_linkleri, 1):
+                try:
+                    firma_adi = firma_bilgi["firma_adi"]
+                    detay_link = firma_bilgi["detay_link"]
+                    hall = firma_bilgi["hall"]
+                    stand = firma_bilgi["stand"]
+                    
+                    print(f"  {idx}/{len(detay_linkleri)} - {firma_adi} detay sayfası açılıyor...")
+                    
+                    # Detay sayfasına git
+                    driver.get(detay_link)
+                    time.sleep(2)
+                    
+                    # İletişim bilgilerini al
+                    adres = ""
+                    email = ""
+                    telefon = ""
+                    website = ""
+                    
+                    try:
+                        contact_div = driver.find_element(By.CSS_SELECTOR, "div.exh-contact")
+                        contact_paragraphs = contact_div.find_elements(By.TAG_NAME, "p")
+                        
+                        for p in contact_paragraphs:
+                            p_text = p.text.strip()
+                            if p_text.startswith("Address") or p_text.startswith("地址"):
+                                adres = p_text.split("：", 1)[-1].split(":", 1)[-1].strip()
+                            elif p_text.startswith("Email") or p_text.startswith("邮箱"):
+                                email = p_text.split("：", 1)[-1].split(":", 1)[-1].strip()
+                            elif p_text.startswith("Tel") or p_text.startswith("电话"):
+                                telefon = p_text.split("：", 1)[-1].split(":", 1)[-1].strip()
+                            elif p_text.startswith("Website") or p_text.startswith("网址"):
+                                website = p_text.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    except Exception as e:
+                        print(f"    ⚠️ İletişim bilgisi alınamadı: {e}")
+                    
+                    # Ürün gruplarını al (Products Recommendation)
+                    urun_gruplari = ""
+                    try:
+                        product_items = driver.find_elements(By.CSS_SELECTOR, "div.product-item h3")
+                        if product_items:
+                            urun_gruplari = ", ".join([p.text.strip() for p in product_items if p.text.strip()][:5])
+                    except:
+                        pass
+                    
+                    # Email yoksa website'den bulmayı dene
+                    if not email and website:
+                        try:
+                            # Website'i düzelt
+                            if website and not website.startswith("http"):
+                                website = "http://" + website
+                            
+                            print(f"    🔎 Website'den email aranıyor...")
+                            email_list = site_icerisinden_email_bul(website)
+                            if email_list and len(email_list) > 0:
+                                for mail in email_list:
+                                    if mail and "@" in mail:
+                                        email = mail
+                                        break
+                        except:
+                            pass
+
+                    print(f"  ✅ {idx}/{len(detay_linkleri)} - {firma_adi}")
+
+                    # Stand No formatla
+                    stand_no = f"{hall}-{stand}" if hall and stand else (stand or hall)
+
+                    tablo.append({
+                        "Data Source/ExhibitionName": "Power Transmission and Control",
+                        "ExhibitionProductGroup": urun_gruplari,
+                        "CompanyName": firma_adi,
+                        "CompanyWebsite": website,
+                        "CompanyMail": email,
+                        "CompanyMail2": "",
+                        "CompanyPhone": telefon,
+                        "CompanyAddress": adres,
+                        "CompanyZipCode": "",
+                        "CompanyCity": "",
+                        "CompanyCountry": "China",
+                        "CompanyBusinessType": "",
+                        "Stand No": stand_no
+                    })
+
+                except Exception as e:
+                    print(f"  ❌ Firma bilgisi işlenirken hata: {e}")
+                    continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # !!! TÜM YENİ FONKSİYONLAR BU BLOĞU İÇERMELİ !!!
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        try:
+            excel_buffer = io.BytesIO()
+            df.to_excel(excel_buffer, index=False, engine='openpyxl')
+            excel_buffer.seek(0)
+            st.download_button(
+                label="📥 Excel (.xlsx) İndir",
+                data=excel_buffer,
+                file_name=f"{st.session_state.get('function_name', 'ptc_asia')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except ImportError:
+            st.warning("⚠️ Excel (.xlsx) indirme için 'openpyxl' modülü gerekli. Lütfen `pip install openpyxl` komutunu çalıştırın.")
+        except Exception as e:
+            st.error(f"❌ Excel oluşturulurken hata: {e}")
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'ptc_asia')}.csv",
+            mime="text/csv"
+        )
+        
+        # İstatistikler
+        if not df.empty:
+            st.info(f"📊 Toplam {len(df)} firma bilgisi çekildi.")
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty:
+            print(f"Toplam firma: {len(df)}")
+            
+    return df
+
