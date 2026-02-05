@@ -2384,3 +2384,231 @@ def scrape_mca_world_fair():
             
     return df
 
+
+def scrape_logimotion(sayfa_sayisi):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://logimotion.ae.messefrankfurt.com/dubai/en/exhibitor-search.html"
+    tablo = []
+
+    try:
+        for page_num in range(1, sayfa_sayisi + 1):
+            print(f"\n🔄 {page_num}. sayfa işleniyor...")
+
+            try:
+                # Sayfa URL'i
+                current_url = f"{base_url}?page={page_num}&pagesize=30"
+                print(f"📄 URL: {current_url}")
+                driver.get(current_url)
+                time.sleep(3)
+
+                # Liste sayfasındaki firma kartlarını bul
+                firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.ex-exhibitor-search-results-container a.a-link--no-focus")
+                
+                if not firma_kartlari:
+                    print(f"⚠️ {page_num}. sayfada firma bulunamadı.")
+                    break
+                
+                print(f"📊 {len(firma_kartlari)} firma bulundu")
+
+                # Detay linklerini topla
+                firma_linkleri = []
+                for kart in firma_kartlari:
+                    try:
+                        detay_link = kart.get_attribute("href")
+                        if detay_link:
+                            # Eğer relative URL ise, base domain ile birleştir
+                            if detay_link.startswith("/"):
+                                detay_link = "https://logimotion.ae.messefrankfurt.com" + detay_link
+                            firma_linkleri.append(detay_link)
+                    except:
+                        continue
+                
+                # Linkleri deduplicate et (sırayı koruyarak)
+                firma_linkleri = list(dict.fromkeys(firma_linkleri))
+                print(f"🔗 {len(firma_linkleri)} firma linki toplandı (Tekrarlar temizlendi)")
+
+                # Her firmanın detay sayfasına git
+                for idx, detay_link in enumerate(firma_linkleri, 1):
+                    try:
+                        print(f"  {idx}/{len(firma_linkleri)}. 🔍 Detay sayfası açılıyor...")
+                        driver.get(detay_link)
+                        time.sleep(2)
+
+                        # Firma adı
+                        try:
+                            # Önce h1 headline dene
+                            try:
+                                firma_adi = driver.find_element(By.CSS_SELECTOR, "h1.ex-exhibitor-detail__title-headline").text.strip()
+                            except:
+                                firma_adi = driver.find_element(By.TAG_NAME, "h1").text.strip()
+                        except:
+                            firma_adi = ""
+                        
+                        # Adres, Ülke, Şehir, Zip Parsing
+                        adres_text = ""
+                        ulke = ""
+                        posta_kodu = ""
+                        sehir = ""
+
+                        try:
+                            # Adres elementini bul
+                            try:
+                                adres_elem = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_element_located((By.CSS_SELECTOR, "p.ex-contact-box__address-field-full-address"))
+                                )
+                            except:
+                                # Element yoksa direk geç
+                                adres_elem = None
+
+                            if adres_elem:
+                                # innerHTML ile alıp <br> leri \n yapalım
+                                raw_html = adres_elem.get_attribute("innerHTML")
+                                if raw_html:
+                                    # <br> taglerini newline ile değiştir
+                                    adres_text_raw = raw_html.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+                                    # Diğer HTML taglerini regex ile temizle
+                                    adres_text = re.sub(r'<[^>]+>', '', adres_text_raw).strip()
+                                else:
+                                    adres_text = adres_elem.text.strip() # Fallback
+                                
+                                # Satırlara böl
+                                adres_satirlari = [satir.strip() for satir in adres_text.split('\n') if satir.strip()]
+                                
+                                if len(adres_satirlari) > 0:
+                                    # Son satır ülke
+                                    ulke = adres_satirlari[-1]
+                                    
+                                    # Eğer sondan bir önceki satır varsa, posta kodu ve şehir olabilir
+                                    if len(adres_satirlari) > 1:
+                                        sondan_bir_onceki = adres_satirlari[-2]
+                                        # Zip kodu tespiti (basitçe sayı içeriyor mu veya başta sayı var mı)
+                                        # Örnek: "35010 Padova" -> 35010 zip, Padova şehir
+                                        parts = sondan_bir_onceki.split(' ', 1)
+                                        if len(parts) > 1 and any(c.isdigit() for c in parts[0]):
+                                            posta_kodu = parts[0]
+                                            sehir = parts[1]
+                                        else:
+                                            # Zip yoksa tüm satırı şehir kabul et
+                                            sehir = sondan_bir_onceki
+                        except Exception as e:
+                            # print(f"Adres parse hatası: {e}")
+                            pass
+                            
+                        # Telefon
+                        telefon = ""
+                        try:
+                            telefon_elem = driver.find_element(By.CSS_SELECTOR, "a.ex-contact-box__address-field-tel-number")
+                            telefon_href = telefon_elem.get_attribute("href")
+                            if telefon_href and "tel:" in telefon_href:
+                                telefon = telefon_href.replace("tel:", "").strip()
+                        except:
+                            telefon = ""
+
+                        # Website
+                        website = ""
+                        try:
+                            website_elem = driver.find_element(By.CSS_SELECTOR, "a.ex-contact-box__website-link")
+                            website = website_elem.get_attribute("href")
+                        except:
+                            website = ""
+                        
+                        # Email
+                        email = ""
+                        try:
+                            email_btn = driver.find_element(By.CSS_SELECTOR, "a.ex-contact-box__contact-btn")
+                            mailto_href = email_btn.get_attribute("href")
+                            if mailto_href and "mailto:" in mailto_href:
+                                email = mailto_href.replace("mailto:", "").split("?")[0].strip()
+                        except:
+                            email = ""
+                        
+                        # Eğer email yoksa ve website varsa, siteden ara
+                        if not email and website:
+                            try:
+                                print(f"     🔎 Website'den email aranıyor...")
+                                email_list = site_icerisinden_email_bul(website)
+                                if email_list and len(email_list) > 0:
+                                    for mail in email_list:
+                                        if mail and "@" in mail:
+                                            email = mail
+                                            break
+                            except:
+                                pass
+                        
+                        # Ürün Grupları
+                        urun_gruplari = ""
+                        try:
+                            urun_listesi = driver.find_elements(By.CSS_SELECTOR, "div.ex-exhibitor-detail-categories li.ex-list-toggle__list-item span")
+                            urun_gruplari = ", ".join([item.text.strip() for item in urun_listesi if item.text.strip()])
+                        except:
+                            urun_gruplari = ""
+
+                        print(f"  ✅ {firma_adi} - {ulke}")
+
+                        tablo.append({
+                            "Data Source/ExhibitionName": "Logimotion Dubai",
+                            "ExhibitionProductGroup": urun_gruplari,
+                            "CompanyName": firma_adi,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email,
+                            "CompanyMail2": "",
+                            "CompanyPhone": telefon,
+                            "CompanyAddress": adres_text.replace("\n", " "),
+                            "CompanyZipCode": posta_kodu,
+                            "CompanyCity": sehir,
+                            "CompanyCountry": ulke,
+                            "CompanyBusinessType": "",
+                            "Detay Link": detay_link
+                        })
+
+                    except Exception as e:
+                        print(f"  ❌ Firma detayı işlenirken hata: {e}")
+                        continue
+
+            except Exception as e:
+                print(f"❌ Sayfa {page_num} işlenirken hata: {e}")
+                break
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Excel (.xlsx) İndir",
+            data=excel_buffer,
+            file_name=f"{st.session_state.get('function_name', 'logimotion')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'logimotion')}.csv",
+            mime="text/csv"
+        )
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty:
+            print(f"Toplam firma: {len(df)}")
+            
+    return df
