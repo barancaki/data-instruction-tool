@@ -2612,3 +2612,172 @@ def scrape_logimotion(sayfa_sayisi):
             print(f"Toplam firma: {len(df)}")
             
     return df
+
+def scrape_gitex(scroll_count):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://exhibitors.gitex.com/gitex-global-2025/Exhibitor"
+    tablo = []
+
+    try:
+        print(f"🔄 Gitex Global anasayfası yükleniyor...")
+        driver.get(base_url)
+        time.sleep(5)
+
+        # Scrolling logic
+        print(f"🔄 {scroll_count} kez aşağı kaydırılacak...")
+        for i in range(scroll_count):
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            print(f"  ⬇️ Scoll {i+1}/{scroll_count} tamamlandı. Yükleniyor...")
+            time.sleep(4) # Wait for content to load
+        
+        # Linkleri topla
+        print("🔍 Linkler toplanıyor...")
+        try:
+            # "VIEW PROFILE" button links
+            # Based on inspection: href="/gitex-global-2025/Exhibitor/ExbDetails/..."
+            link_elements = driver.find_elements(By.XPATH, "//a[contains(@href, '/Exhibitor/ExbDetails/')]")
+            
+            # Deduplicate links while keeping order
+            seen_links = set()
+            firma_linkleri = []
+            for elem in link_elements:
+                url = elem.get_attribute("href")
+                if url and url not in seen_links:
+                    seen_links.add(url)
+                    firma_linkleri.append(url)
+                    
+            print(f"🔗 {len(firma_linkleri)} benzersiz firma linki bulundu.")
+            
+        except Exception as e:
+            print(f"❌ Linkler alınırken hata: {e}")
+            firma_linkleri = []
+
+        # Her firmayı ziyaret et
+        for idx, detay_link in enumerate(firma_linkleri, 1):
+            try:
+                print(f"  {idx}/{len(firma_linkleri)}. 🔍 Detay sayfası: {detay_link}")
+                driver.get(detay_link)
+                time.sleep(2)
+                
+                # --- VERİ ÇEKME ---
+                
+                # 1. Company Name
+                # Selector: h4.group.card-title.inner.list-group-item-heading
+                try:
+                    firma_adi = driver.find_element(By.CSS_SELECTOR, "h4.group.card-title").text.strip()
+                except:
+                    try: 
+                        firma_adi = driver.find_element(By.TAG_NAME, "h4").text.strip()
+                    except:
+                        firma_adi = ""
+                
+                # 2. Country
+                # Selector: span with float:left
+                # Alternatively, check existing HTML logic: <span style="float:left;">Romania</span>
+                try:
+                    country_elem = driver.find_element(By.XPATH, "//span[contains(@style, 'float:left')]")
+                    country = country_elem.text.strip()
+                except:
+                    country = ""
+                
+                # 3. Product Groups
+                # Selector: ul.sector_block li
+                try:
+                    products_elems = driver.find_elements(By.CSS_SELECTOR, "ul.sector_block li")
+                    products = ", ".join([p.text.strip() for p in products_elems if p.text.strip()])
+                except:
+                    products = ""
+                
+                # 4. Website
+                # Selector: a containing "VISIT WEBSITE" or img
+                website = ""
+                try:
+                    # Look for 'VISIT WEBSITE' text
+                    website_elem = driver.find_element(By.XPATH, "//a[contains(., 'VISIT WEBSITE')]")
+                    website = website_elem.get_attribute("href")
+                except:
+                    try:
+                        # Fallback: finding any external link that is not the current domain might be risky, 
+                        # so let's stick to specific structure if possible.
+                        # Sometimes it is an icon.
+                        pass
+                    except:
+                        pass
+
+                # 5. Email (Search on website)
+                email = ""
+                if website:
+                    try:
+                        print(f"     🔎 Website ({website}) taranıyor...")
+                        email_list = site_icerisinden_email_bul(website)
+                        if email_list:
+                             for mail in email_list:
+                                if mail and "@" in mail:
+                                    email = mail
+                                    break
+                    except:
+                        pass
+
+                # Add row
+                tablo.append({
+                    "Data Source/ExhibitionName": "Gitex Global",
+                    "ExhibitionProductGroup": products,
+                    "CompanyName": firma_adi,
+                    "CompanyWebsite": website,
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": "",
+                    "CompanyAddress": "", # Address logic not strictly defined, leaving empty or could assume Country is partial address
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": country,
+                    "CompanyBusinessType": ""
+                })
+                
+                print(f"     ✅ {firma_adi} | {country}")
+
+            except Exception as e:
+                print(f"  ❌ Firma işlenirken hata: {e}")
+                continue
+
+    except Exception as e:
+        print(f"❌ Genel Hata: {e}")
+    
+    finally:
+        driver.quit()
+        
+    df = pd.DataFrame(tablo)
+    
+    # Streamlit Output
+    if st:
+        st.dataframe(df)
+        
+        # Excel
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Excel (.xlsx) İndir",
+            data=excel_buffer,
+            file_name=f"gitex_global_export.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+        # CSV
+        csv_csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_csv,
+            file_name="gitex_global_export.csv",
+            mime="text/csv"
+        )
+    
+    return df

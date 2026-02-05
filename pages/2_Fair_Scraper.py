@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex
 
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
@@ -369,5 +369,16 @@ if url in ["https://logimotion.ae.messefrankfurt.com/dubai/en/exhibitor-search.h
                 st.session_state['function_name'] = 'logimotion'
                 scrape_logimotion(int(sayfa_sayisi))
             st.success("The scan is complete!")
+
+if "exhibitors.gitex.com" in url:
+    st.info("Target: Gitex Global Dubai")
+    scroll_count = st.number_input("How many times to scroll (load more)?", min_value=1, value=5)
+    
+    if st.button("Scan"):
+        with st.spinner("Scanning..."):
+            st.session_state['function_name'] = 'gitex_global'
+            scrape_gitex(scroll_count)
+        st.success("Scan complete!")
+        st.balloons()
 
 st.text('© Baran Çakı 2025')
