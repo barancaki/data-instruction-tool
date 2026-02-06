@@ -2781,3 +2781,217 @@ def scrape_gitex(scroll_count):
         )
     
     return df
+
+def scrape_mostra_convegno(scroll_sayisi):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    base_url = "https://www.mcexpocomfort.it/en-gb/exhibitor-directory.html#/"
+    tablo = []
+
+    try:
+        print(f"🔄 Ana sayfa yükleniyor...")
+        driver.get(base_url)
+        time.sleep(5) # İlk yükleme için biraz bekle
+        
+        # Scroll işlemi
+        print(f"📜 Sayfa {scroll_sayisi} kez scroll ediliyor...")
+        for scroll_num in range(scroll_sayisi):
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(3) # Yükleme için bekle
+            
+            # Bazen yukarı aşağı yapmak tetikleyebilir
+            driver.execute_script("window.scrollBy(0, -200);")
+            time.sleep(1)
+            
+            print(f"  📜 {scroll_num + 1}/{scroll_sayisi} scroll tamamlandı")
+
+        print(f"✅ Scroll işlemi tamamlandı. Firma kartları toplanıyor...")
+
+        # Firma kartlarını bul
+        # Selector: div.directory-item
+        firma_kartlari = driver.find_elements(By.CSS_SELECTOR, "div.directory-item")
+        
+        if not firma_kartlari:
+            print(f"⚠️ Firma bulunamadı.")
+        else:
+            print(f"📊 {len(firma_kartlari)} firma bulundu")
+
+            # Detay linklerini topla
+            firma_linkleri = []
+            for kart in firma_kartlari:
+                try:
+                    # Link genellikle h3 başlığında veya data-dtm*="exhibitorName" olan elementte
+                    # main_table.html analizine göre: div[data-testid="name-control"] a
+                    link_elem = kart.find_element(By.CSS_SELECTOR, "div[data-testid='name-control'] a")
+                    link = link_elem.get_attribute("href")
+                    if link:
+                        firma_linkleri.append(link)
+                except:
+                    continue
+            
+            # Tekil linkleri al (set kullanarak)
+            firma_linkleri = list(set(firma_linkleri))
+            print(f"🔗 {len(firma_linkleri)} tekil firma linki toplandı")
+
+            # Her firmanın detay sayfasına git
+            for idx, detay_link in enumerate(firma_linkleri, 1):
+                try:
+                    print(f"  {idx}/{len(firma_linkleri)}. 🔍 Detay sayfası açılıyor...")
+                    driver.get(detay_link)
+                    time.sleep(3)
+
+                    # Firma Adı
+                    try:
+                        firma_adi = driver.find_element(By.CSS_SELECTOR, "div.details-header h1.wrap-word").text.strip()
+                    except:
+                        firma_adi = ""
+                    
+                    # Ürün Grupları
+                    urun_gruplari = ""
+                    try:
+                        tags = driver.find_elements(By.CSS_SELECTOR, "div.filter-tags span.tag-item")
+                        urun_gruplari = ", ".join([tag.text.strip() for tag in tags if tag.text.strip()])
+                    except:
+                        urun_gruplari = ""
+
+                    # İletişim Bilgileri (Container: div.exhibitor-details-contact-us-container)
+                    website = ""
+                    email = ""
+                    telefon = ""
+                    
+                    try:
+                        # Website
+                        try:
+                            web_elem = driver.find_element(By.CSS_SELECTOR, "a[data-dtm='exhibitorDetails_externalLink']")
+                            website = web_elem.get_attribute("href")
+                        except:
+                            pass
+                        
+                        # Email
+                        try:
+                            mail_elem = driver.find_element(By.CSS_SELECTOR, "a[data-dtm='exhibitorDetails_emailLink']")
+                            href = mail_elem.get_attribute("href")
+                            if href and "mailto:" in href:
+                                email = href.replace("mailto:", "").split("?")[0].strip()
+                        except:
+                            pass
+                            
+                        # Telefon
+                        try:
+                            tel_elem = driver.find_element(By.CSS_SELECTOR, "a[data-dtm='exhibitorDetails_phoneLink']")
+                            href = tel_elem.get_attribute("href")
+                            if href and "tel:" in href:
+                                telefon = href.replace("tel:", "").strip()
+                        except:
+                            pass
+                    except:
+                        pass
+
+                    # Email advanced search (eğer sayfada yoksa)
+                    if not email and website:
+                        try:
+                            print(f"     🔎 Website'den email aranıyor...")
+                            email_list = site_icerisinden_email_bul(website)
+                            if email_list and len(email_list) > 0:
+                                for mail in email_list:
+                                    if mail and "@" in mail:
+                                        email = mail
+                                        break
+                        except:
+                            pass
+
+                    # Adres ve Ülke
+                    adres = ""
+                    ulke = ""
+                    sehir = "" # Genelde adres içinde, ayrıştırmak zor olabilir
+                    
+                    try:
+                        adres_div = driver.find_element(By.ID, "exhibitor_details_address")
+                        p_elem = adres_div.find_element(By.TAG_NAME, "p")
+                        spans = p_elem.find_elements(By.TAG_NAME, "span")
+                        
+                        adres_parts = [s.text.strip() for s in spans if s.text.strip()]
+                        adres = " ".join(adres_parts)
+                        
+                        if adres_parts:
+                            # Son parça genellikle ülkedir
+                            ulke = adres_parts[-1]
+                    except:
+                        adres = ""
+
+                    print(f"  ✅ {firma_adi}")
+
+                    tablo.append({
+                        "Data Source/E_Exhibition": "Mostra Convegno Expocomfort",
+                        "ExhibitionProductGroup": urun_gruplari,
+                        "CompanyName": firma_adi,
+                        "CompanyWebsite": website,
+                        "CompanyMail": email,
+                        "CompanyMail2": "",
+                        "CompanyPhone": telefon,
+                        "CompanyAddress": adres,
+                        "CompanyZipCode": "",
+                        "CompanyCity": sehir,
+                        "CompanyCountry": ulke,
+                        "CompanyBusinessType": "",
+                        "Detay Link": detay_link
+                    })
+
+                except Exception as e:
+                    print(f"  ❌ Firma detayı işlenirken hata: {e}")
+                    continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    print(f"\n🎯 Toplam çekilen firma sayısı: {len(df)}")
+
+    # !!! TÜM YENİ FONKSİYONLAR BU BLOĞU İÇERMELİ !!!
+    if st:
+        st.dataframe(df)
+        
+        # 📥 Excel İndir
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Excel (.xlsx) İndir",
+            data=excel_buffer,
+            file_name=f"{st.session_state.get('function_name', 'mostra_convegno')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # 📥 CSV İndir
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 CSV İndir",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'mostra_convegno')}.csv",
+            mime="text/csv"
+        )
+        
+        # Grafikler
+        if not df.empty:
+            try:
+                if "CompanyCountry" in df.columns:
+                    ulke_sayilari = df["CompanyCountry"].value_counts().reset_index()
+                    ulke_sayilari.columns = ["Ülke", "Firma Sayısı"]
+                    fig = px.bar(ulke_sayilari.head(20), x="Ülke", y="Firma Sayısı", title="Ülkelere Göre Firma Dağılımı")
+                    st.plotly_chart(fig)
+            except Exception as e:
+                st.error(f"Grafik çizilirken hata: {e}")
+    else:
+        print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
+        if not df.empty and "CompanyCountry" in df.columns:
+            print(df["CompanyCountry"].value_counts())
+            
+    return df
