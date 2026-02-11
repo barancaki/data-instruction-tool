@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex, scrape_mostra_convegno
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex, scrape_mostra_convegno, scrape_lopec, scrape_wam_morocco
 
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
@@ -384,11 +384,32 @@ if "exhibitors.gitex.com" in url:
 if "mcexpocomfort.it" in url:
     st.info("Target: Mostra Convegno Expocomfort")
     scroll_count = st.number_input("How many times to scroll (load more)?", min_value=1, value=5)
-    
+
     if st.button("Scan"):
         with st.spinner("Scanning..."):
             st.session_state['function_name'] = 'mostra_convegno'
             scrape_mostra_convegno(scroll_count)
+        st.success("Scan complete!")
+        st.balloons()
+
+if "exhibitors.lopec.com" in url:
+    st.info("LOPEC 2026 Scraper Selected")
+    iterations = st.number_input("How many 'Next' clicks?", min_value=1, value=1)
+    if st.button("Start Scan"):
+        st.session_state['function_name'] = "lopec_2026"
+        with st.spinner("Scraping LOPEC 2026..."):
+            scrape_lopec(iterations)
+        st.success("The scan is complete!")
+        st.balloons()
+
+if "wammorocco.com" in url:
+    st.info("Target: WAM Morocco 2026 Exhibitor List")
+    scroll_count = st.number_input("How many times to scroll (load more)?", min_value=1, value=5)
+
+    if st.button("Start Scan"):
+        with st.spinner("Scanning WAM Morocco..."):
+            st.session_state['function_name'] = 'wam_morocco'
+            scrape_wam_morocco(scroll_count)
         st.success("Scan complete!")
         st.balloons()
 

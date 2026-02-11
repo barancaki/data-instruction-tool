@@ -2978,7 +2978,7 @@ def scrape_mostra_convegno(scroll_sayisi):
             file_name=f"{st.session_state.get('function_name', 'mostra_convegno')}.csv",
             mime="text/csv"
         )
-        
+
         # Grafikler
         if not df.empty:
             try:
@@ -2993,5 +2993,201 @@ def scrape_mostra_convegno(scroll_sayisi):
         print("\n📊 İstatistikler (Streamlit dışı çalıştırma):")
         if not df.empty and "CompanyCountry" in df.columns:
             print(df["CompanyCountry"].value_counts())
-            
+
+    return df
+
+def scrape_lopec(iterations):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    base_url = "https://exhibitors.lopec.com/industry-directory/2026/list-of-exhibitors/"
+    tablo = []
+
+    try:
+        print(f"🔄 LOPEC 2026 ana sayfa yükleniyor...")
+        driver.get(base_url)
+        time.sleep(3)
+        handle_cookie_consent_final(driver)
+
+        for i in range(iterations):
+            print(f"\n🔄 Sayfa {i+1} işleniyor...")
+            try:
+                exhibitor_elements = driver.find_elements(By.CSS_SELECTOR, ".pb_ce .ce_cntnt h2 a")
+                exhibitor_links = [el.get_attribute("href") for el in exhibitor_elements if el.get_attribute("href")]
+
+                for link in exhibitor_links:
+                    try:
+                        driver.execute_script("window.open(arguments[0], '_blank');", link)
+                        driver.switch_to.window(driver.window_handles[1])
+                        time.sleep(2)
+
+                        company_name = driver.find_element(By.CSS_SELECTOR, ".ce_cntct .ce_head").text.strip() if driver.find_elements(By.CSS_SELECTOR, ".ce_cntct .ce_head") else ""
+                        address = driver.find_element(By.CSS_SELECTOR, ".ce_addr").text.strip() if driver.find_elements(By.CSS_SELECTOR, ".ce_addr") else ""
+                        phone = driver.find_element(By.CSS_SELECTOR, '.ce_phone a[href^="tel:"]').text.strip() if driver.find_elements(By.CSS_SELECTOR, '.ce_phone a[href^="tel:"]') else ""
+                        email = driver.find_element(By.CSS_SELECTOR, '.ce_email a[href^="mailto:"]').text.strip() if driver.find_elements(By.CSS_SELECTOR, '.ce_email a[href^="mailto:"]') else ""
+                        website = driver.find_element(By.CSS_SELECTOR, ".ce_website a.vam").get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, ".ce_website a.vam") else ""
+
+                        if not email and website:
+                            email = find_email_advanced(driver, website)
+
+                        tablo.append({
+                            "Data Source/ExhibitionName": "LOPEC 2026",
+                            "ExhibitionProductGroup": "Exhibitor",
+                            "CompanyName": company_name,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email,
+                            "CompanyPhone": phone,
+                            "CompanyAddress": address,
+                            "CompanyMail2": "", "CompanyZipCode": "", "CompanyCity": "", "CompanyCountry": "", "CompanyBusinessType": ""
+                        })
+                        driver.close()
+                        driver.switch_to.window(driver.window_handles[0])
+                    except Exception:
+                        if len(driver.window_handles) > 1:
+                            driver.close()
+                            driver.switch_to.window(driver.window_handles[0])
+
+                if i < iterations - 1:
+                    try:
+                        next_btn = driver.find_element(By.CSS_SELECTOR, 'input[name="SRField_next"]')
+                        next_btn.click()
+                        time.sleep(4)
+                    except Exception:
+                        break
+            except Exception:
+                break
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    if st.session_state.get('function_name') == 'lopec_2026':
+        st.write(f"### Scanned Data ({len(df)} companies)")
+        st.dataframe(df)
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("Download CSV", csv, "lopec_2026_exhibitors.csv", "text/csv")
+    return df
+
+
+def scrape_wam_morocco(scroll_count):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    base_url = "https://exhibitors.wammorocco.com/wam-morocco-2026/Exhibitor"
+    tablo = []
+
+    try:
+        driver.get(base_url)
+        time.sleep(5)
+        # Cookie consent removed as requested
+
+        # Infinite Scroll
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        for i in range(scroll_count):
+            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.END)
+            time.sleep(3)
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+
+        # Extract exhibitor links - Updated Selectors
+        links = []
+        view_profile_links = driver.find_elements(By.XPATH, "//a[contains(@href, 'ExbDetails')]")
+        for link_elem in view_profile_links:
+            url_attr = link_elem.get_attribute("href")
+            if url_attr and url_attr not in links:
+                links.append(url_attr)
+
+        if not links:
+            st.warning("No exhibitor links found. Please check the selectors or scroll count.")
+            return pd.DataFrame()
+
+        st.info(f"Found {len(links)} exhibitors. Starting detailed extraction...")
+
+        for link in links:
+            try:
+                driver.get(link)
+                time.sleep(2)
+
+                # Name is in h4
+                company_name = driver.find_element(By.TAG_NAME, "h4").text.strip() if driver.find_elements(By.TAG_NAME, "h4") else ""
+
+                stand_no = ""
+                country = ""
+                product_groups = ""
+                website = ""
+
+                # Extracting details from the page
+                try:
+                    all_text = driver.find_element(By.TAG_NAME, "body").text
+                    if "Stand No" in all_text:
+                        # Extract stand no from text
+                        lines = all_text.split("\n")
+                        for idx, line in enumerate(lines):
+                            if "Stand No" in line:
+                                stand_no = line.strip()
+                                # Country is often the next line
+                                if idx + 1 < len(lines):
+                                    country = lines[idx+1].strip()
+                                break
+                except: pass
+
+                # Product groups - Updated with specific sector_block selector
+                try:
+                    pg_elements = driver.find_elements(By.CSS_SELECTOR, "ul.sector_block li")
+                    product_groups = ", ".join([el.text.strip() for el in pg_elements if el.text.strip()])
+
+                    if not product_groups:
+                        pg_elements = driver.find_elements(By.CSS_SELECTOR, ".company_description ul li")
+                        product_groups = ", ".join([el.text.strip() for el in pg_elements if el.text.strip() and "VISIT" not in el.text.upper()])
+                except:
+                    product_groups = ""
+
+                # Website - look for "VISIT WEBSITE"
+                try:
+                    ws_element = driver.find_element(By.XPATH, "//a[contains(text(), 'VISIT WEBSITE')]")
+                    website = ws_element.get_attribute("href")
+                except: pass
+
+                email = ""
+                if website:
+                    email = find_email_advanced(driver, website)
+
+                tablo.append({
+                    "Data Source/ExhibitionName": "WAM Morocco 2026",
+                    "ExhibitionProductGroup": product_groups,
+                    "CompanyName": company_name,
+                    "CompanyWebsite": website,
+                    "CompanyMail": email,
+                    "CompanyPhone": "",
+                    "CompanyAddress": stand_no,
+                    "CompanyMail2": "",
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": country,
+                    "CompanyBusinessType": ""
+                })
+            except Exception as e:
+                print(f"Error processing {link}: {e}")
+                continue
+
+    finally:
+        driver.quit()
+
+    df = pd.DataFrame(tablo)
+    if st.session_state.get('function_name') == 'wam_morocco':
+        st.write(f"### Scanned Data ({len(df)} companies)")
+        st.dataframe(df)
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("Download CSV", csv, "wam_morocco_2026_exhibitors.csv", "text/csv")
     return df
