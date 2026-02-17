@@ -3191,3 +3191,199 @@ def scrape_wam_morocco(scroll_count):
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download CSV", csv, "wam_morocco_2026_exhibitors.csv", "text/csv")
     return df
+
+def scrape_chillventa(iterations):
+    options = Options()
+    options.add_argument("--headless") # Headless modunu kapattık, sorunları görmek için.
+    options.add_argument("--start-maximized")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    wait = WebDriverWait(driver, 15)
+
+    base_url = "https://www.chillventa.de/en/exhibitors-products/find-exhibitors"
+    tablo = []
+
+    try:
+        st.info(f"Opening {base_url}...")
+        driver.get(base_url)
+        time.sleep(8) # Sayfanın tam yüklenmesi için biraz daha uzun bekle
+
+        # Cookie Consent & Overlay Removal (Fast & Silent)
+        driver.execute_script("""
+            var ids = ['cmpbox', 'onetrust-consent-sdk', 'onetrust-banner-sdk'];
+            ids.forEach(id => {
+                var el = document.getElementById(id);
+                if (el) el.remove();
+            });
+            var overlays = document.querySelectorAll('.cmpboxoverlay, .onetrust-pc-dark-filter');
+            overlays.forEach(ol => ol.remove());
+            document.body.style.overflow = 'auto';
+        """)
+        time.sleep(2)
+
+        # Iterations for 'Show more'
+        for i in range(iterations):
+            try:
+                # Scroll to bottom to ensure button is in view
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(1.5)
+
+                # Try finding the button using provided testid and text content
+                try:
+                    show_more_xpath = "//button[@data-testid='default-button' and (contains(., 'Show more') or contains(., 'show more'))]"
+                    show_more = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, show_more_xpath)))
+
+                    # Scroll and click via JS
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", show_more)
+                    time.sleep(0.5)
+                    driver.execute_script("arguments[0].click();", show_more)
+
+                    # Print to terminal instead of Streamlit
+                    print(f"Clicked 'Show more' ({i+1}/{iterations})")
+                    time.sleep(3) # Wait for content to load
+                except:
+                    # If button not found, maybe all items are loaded
+                    break
+
+            except Exception as e:
+                break
+
+        # Collect Links
+        st.info("Collecting exhibitor links...")
+        links = set()
+        try:
+            elements = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/en/exhibitors/"]')
+            for el in elements:
+                href = el.get_attribute("href")
+                if href and "/exhibitors/" in href and "favorites" not in href:
+                    links.add(href)
+        except Exception as e:
+            st.error(f"Error collecting links: {e}")
+
+        link_list = list(links)
+        st.success(f"Found {len(link_list)} exhibitors. Starting details extraction...")
+
+        progress_bar = st.progress(0)
+
+        for idx, link in enumerate(link_list):
+            try:
+                driver.get(link)
+                time.sleep(1.0)
+
+                name = ""
+                address = ""
+                phone = ""
+                website = ""
+                email = ""
+                products = ""
+                country = ""
+
+                # Name
+                try:
+                    name = driver.find_element(By.TAG_NAME, "h1").text.strip()
+                except:
+                    try:
+                        name = driver.find_element(By.TAG_NAME, "h2").text.strip()
+                    except: pass
+
+                # Address & Country
+                try:
+                    # Updated selector: p.text-copy-l
+                    addr_elems = driver.find_elements(By.CSS_SELECTOR, "p.text-copy-l")
+                    addr_lines = [el.text.strip() for el in addr_elems if el.text.strip()]
+                    if addr_lines:
+                        address = ", ".join(addr_lines)
+                        country = addr_lines[-1]
+                except: pass
+
+                # Phone
+                try:
+                    # Updated selector: a[data-testid="company-details-contacts-phone"]
+                    phone_el = driver.find_element(By.CSS_SELECTOR, 'a[data-testid="company-details-contacts-phone"]')
+                    phone = phone_el.text.strip()
+                    if not phone:
+                        phone = phone_el.get_attribute("href").replace("tel:", "")
+                except:
+                    pass
+
+                # Website
+                try:
+                    # Updated selector: a[data-testid="company-details-contacts-website"]
+                    web_el = driver.find_element(By.CSS_SELECTOR, 'a[data-testid="company-details-contacts-website"]')
+                    website = web_el.get_attribute("href")
+                except:
+                    # Fallback
+                    try:
+                        web_els = driver.find_elements(By.CSS_SELECTOR, 'a[href^="http"]')
+                        for we in web_els:
+                            w_href = we.get_attribute("href")
+                            if "chillventa.de" not in w_href and "linkedin" not in w_href and "facebook" not in w_href and "twitter" not in w_href:
+                                website = w_href
+                                break
+                    except: pass
+
+                # Products
+                try:
+                    # Updated selector: span[data-testid="item-X"]
+                    prod_elems = driver.find_elements(By.CSS_SELECTOR, 'span[data-testid^="item-"]')
+                    products = ", ".join([p.text.strip() for p in prod_elems if p.text.strip()])
+                except: pass
+
+                # Email (Advanced Search)
+                if website and website != "N/A":
+                    try:
+                        found_emails = site_icerisinden_email_bul(website)
+                        if found_emails:
+                            for mail in found_emails:
+                                if "@" in mail:
+                                    email = mail
+                                    break
+                    except: pass
+
+                item = {
+                    "Data Source/ExhibitionName": "Chillventa",
+                    "ExhibitionProductGroup": products,
+                    "CompanyName": name,
+                    "CompanyWebsite": website,
+                    "CompanyMail": email,
+                    "CompanyMail2": "",
+                    "CompanyPhone": phone,
+                    "CompanyAddress": address,
+                    "CompanyZipCode": "",
+                    "CompanyCity": "",
+                    "CompanyCountry": country,
+                    "CompanyBusinessType": "",
+                    "Detay Link": link
+                }
+                tablo.append(item)
+
+            except Exception as e:
+                # print(f"Error processing {link}: {e}")
+                pass
+
+            progress_bar.progress((idx + 1) / len(link_list))
+
+    except Exception as e:
+        st.error(f"Critical Error: {e}")
+
+    finally:
+        driver.quit()
+
+    if tablo:
+        df = pd.DataFrame(tablo)
+        st.success(f"Extraction complete! {len(df)} companies found.")
+        st.dataframe(df)
+
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name='chillventa_exhibitors.csv',
+            mime='text/csv',
+        )
+    else:
+        st.warning("No data extracted.")
