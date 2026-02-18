@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex, scrape_mostra_convegno, scrape_lopec, scrape_wam_morocco, scrape_chillventa, scrape_euroshop_2026, scrape_perpa_firmalar, scrape_embedded_world
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex, scrape_mostra_convegno, scrape_lopec, scrape_wam_morocco, scrape_chillventa, scrape_euroshop_2026, scrape_perpa_firmalar, scrape_embedded_world, scrape_global_industrie_exhibitors
 
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
@@ -455,6 +455,23 @@ if "perpa.com/perpa-firmalar" in url:
         with st.spinner("Scanning Perpa company pages..."):
             st.session_state['function_name'] = 'perpa_firmalar'
             scrape_perpa_firmalar(int(page_count))
+        st.success("Scan complete!")
+        st.balloons()
+
+if "global-industrie.com/en/exhibitors-list" in url:
+    st.info("Target: Global Industrie Exhibitors List")
+    load_more_count = st.number_input(
+        "How many times should 'Load more' be clicked? (Approx. +50 records per click)",
+        min_value=0,
+        value=5,
+        step=1,
+        key="global_industrie_load_more_count",
+    )
+
+    if st.button("Start Scan", key="global_industrie_start_scan"):
+        with st.spinner("Scanning Global Industrie exhibitors..."):
+            st.session_state['function_name'] = 'global_industrie'
+            scrape_global_industrie_exhibitors(int(load_more_count))
         st.success("Scan complete!")
         st.balloons()
 

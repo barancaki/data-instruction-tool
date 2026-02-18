@@ -4297,3 +4297,292 @@ def scrape_embedded_world(page_count):
         print(f"Total companies: {len(df)}")
 
     return df
+
+
+def scrape_global_industrie_exhibitors(load_more_count):
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    wait = WebDriverWait(driver, 20)
+
+    base_url = "https://www.global-industrie.com/en/exhibitors-list"
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def pick_value_from_labels(label_map, candidates):
+        for key in candidates:
+            value = label_map.get(key, "")
+            if value:
+                return value
+        return ""
+
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    tablo = []
+    email_cache = {}
+
+    try:
+        status_text.text("Opening exhibitor list...")
+        driver.get(base_url)
+        time.sleep(3)
+        handle_cookie_consent_final(driver)
+
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='/en/exhibitor/']")))
+
+        max_clicks = max(0, int(load_more_count))
+        for click_idx in range(max_clicks):
+            status_text.text(f"Clicking 'Load more' ({click_idx + 1}/{max_clicks})")
+            progress_bar.progress((click_idx + 1) / max_clicks if max_clicks else 0)
+
+            previous_count = len(driver.find_elements(By.CSS_SELECTOR, "a[href*='/en/exhibitor/']"))
+            button_clicked = False
+
+            for _ in range(3):
+                try:
+                    load_more_btn = None
+                    candidate_buttons = driver.find_elements(By.CSS_SELECTOR, "div.sc-fmiMXH.ckTNWo button")
+                    for candidate in candidate_buttons:
+                        if candidate.is_displayed() and candidate.is_enabled():
+                            load_more_btn = candidate
+                            break
+
+                    if load_more_btn is None:
+                        load_more_btn = wait.until(
+                            EC.element_to_be_clickable(
+                                (By.XPATH, "//button[.//span[contains(normalize-space(), 'Load more')] or contains(normalize-space(), 'Load more')]")
+                            )
+                        )
+
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", load_more_btn)
+                    time.sleep(0.8)
+                    driver.execute_script("arguments[0].click();", load_more_btn)
+
+                    wait.until(
+                        lambda d: len(d.find_elements(By.CSS_SELECTOR, "a[href*='/en/exhibitor/']")) > previous_count
+                    )
+                    time.sleep(1.2)
+                    button_clicked = True
+                    break
+                except Exception:
+                    time.sleep(1.2)
+
+            if not button_clicked:
+                print("Load more button not found/clickable anymore. Continuing with collected records.")
+                break
+
+        status_text.text("Collecting exhibitor links...")
+        raw_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/en/exhibitor/']")
+        unique_links = []
+        seen_links = set()
+
+        for element in raw_links:
+            href = normalize_text(element.get_attribute("href"))
+            if not href:
+                continue
+            if href.startswith("/"):
+                href = urljoin(base_url, href)
+            if "/en/exhibitor/" not in href:
+                continue
+            if href in seen_links:
+                continue
+            seen_links.add(href)
+            unique_links.append(href)
+
+        total_links = len(unique_links)
+        st.info(f"Total {total_links} exhibitor detail links found.")
+
+        progress_bar.progress(0)
+        for idx, detail_url in enumerate(unique_links, 1):
+            status_text.text(f"Scraping exhibitor {idx}/{total_links}")
+            progress_bar.progress(idx / total_links if total_links else 1)
+
+            company_name = ""
+            website = ""
+            company_mail = ""
+            company_phone = ""
+            company_address = ""
+            company_zipcode = ""
+            company_city = ""
+            company_country = ""
+            company_business_type = ""
+            product_group = ""
+
+            try:
+                driver.get(detail_url)
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1.hero__title, h1")))
+                time.sleep(1.2)
+
+                try:
+                    company_name = normalize_text(driver.find_element(By.CSS_SELECTOR, "h1.hero__title, h1").text)
+                except Exception:
+                    company_name = ""
+
+                soup = BeautifulSoup(driver.page_source, "html.parser")
+
+                if not company_name:
+                    h1 = soup.find("h1")
+                    company_name = normalize_text(h1.get_text(" ", strip=True)) if h1 else ""
+
+                website_candidates = []
+                for anchor in soup.select("div.sc-kMribo.gYPcRV a[target='_blank'][href]"):
+                    href = normalize_text(anchor.get("href"))
+                    if href:
+                        website_candidates.append(href)
+
+                if not website_candidates:
+                    for anchor in soup.select("a[target='_blank'][href]"):
+                        href = normalize_text(anchor.get("href"))
+                        if href:
+                            website_candidates.append(href)
+
+                for href in website_candidates:
+                    href_lower = href.lower()
+                    if not href_lower.startswith("http"):
+                        continue
+                    if "google.com/maps" in href_lower:
+                        continue
+                    if "global-industrie.com" in href_lower:
+                        continue
+                    website = href
+                    break
+
+                label_map = {}
+                label_nodes = {}
+                for block in soup.select("div.sc-cYeeTI.gCvAOK"):
+                    label_el = block.select_one("div.sc-eEWMrZ.llANtp")
+                    value_el = block.select_one("div.sc-cgCHwa.eALaUR")
+                    if not label_el or not value_el:
+                        continue
+
+                    label = normalize_text(label_el.get_text(" ", strip=True)).rstrip(":").lower()
+                    value = normalize_text(value_el.get_text(" ", strip=True))
+                    if label and value:
+                        label_map[label] = value
+                        label_nodes[label] = value_el
+
+                company_country = pick_value_from_labels(label_map, ["country"])
+                company_phone = pick_value_from_labels(label_map, ["phone", "telephone", "mobile"])
+                company_address = pick_value_from_labels(label_map, ["address", "adress", "street"])
+                company_zipcode = pick_value_from_labels(label_map, ["zip code", "zipcode", "postal code", "postcode", "zip"])
+                company_city = pick_value_from_labels(label_map, ["city", "town"])
+                company_business_type = pick_value_from_labels(
+                    label_map,
+                    ["business type", "company type", "organization type", "organisation type", "type of business"]
+                )
+
+                activity_node = label_nodes.get("activity nomenclature")
+                if activity_node is not None:
+                    product_items = []
+                    seen_items = set()
+                    for node in activity_node.select("div.sc-cVOTOZ.VUOsa"):
+                        item = normalize_text(node.get_text(" ", strip=True))
+                        if not item or item.lower() == "activity":
+                            continue
+                        key = item.lower()
+                        if key in seen_items:
+                            continue
+                        seen_items.add(key)
+                        product_items.append(item)
+                    if product_items:
+                        product_group = ", ".join(product_items)
+
+                if not product_group:
+                    product_group = pick_value_from_labels(label_map, ["activity nomenclature"])
+
+                if website:
+                    if website in email_cache:
+                        company_mail = email_cache[website]
+                    else:
+                        main_window = driver.current_window_handle
+                        try:
+                            driver.switch_to.new_window("tab")
+                            company_mail = normalize_text(find_email_advanced(driver, website))
+                        except Exception:
+                            company_mail = ""
+                        finally:
+                            if len(driver.window_handles) > 1:
+                                driver.close()
+                                driver.switch_to.window(main_window)
+                        email_cache[website] = company_mail
+
+            except Exception as e:
+                print(f"Global Industrie detail parse error ({detail_url}): {e}")
+
+            tablo.append({
+                "Data Source/ExhibitionName": "Global Industrie Exhibitors",
+                "ExhibitionProductGroup": product_group,
+                "CompanyName": company_name,
+                "CompanyWebsite": website,
+                "CompanyMail": company_mail,
+                "CompanyMail2": "",
+                "CompanyPhone": company_phone,
+                "CompanyAddress": company_address,
+                "CompanyZipCode": company_zipcode,
+                "CompanyCity": company_city,
+                "CompanyCountry": company_country,
+                "CompanyBusinessType": company_business_type,
+                "DetailUrl": detail_url,
+            })
+
+    except Exception as e:
+        print(f"Global Industrie scraper error: {e}")
+        st.error(str(e))
+    finally:
+        try:
+            driver.quit()
+        except Exception:
+            pass
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns + ["DetailUrl"]:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + ["DetailUrl"]]
+
+    st.dataframe(df)
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel (.xlsx)",
+        data=excel_buffer,
+        file_name=f"{st.session_state.get('function_name', 'global_industrie')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="Download CSV",
+        data=csv_buffer.getvalue(),
+        file_name=f"{st.session_state.get('function_name', 'global_industrie')}.csv",
+        mime="text/csv",
+    )
+
+    return df
