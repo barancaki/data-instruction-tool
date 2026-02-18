@@ -1,4 +1,4 @@
-@scraper_template.py ve @ui_template.py dosyalarını tamamen incele. Senden yeni bir fuar fonksiyonu yazmanı istiyorum. @fair-scraper-generator/SKILL.md
+@scraper_template.py ve @ui_template.py dosyalarını tamamen incele. Senden yeni bir fuar fonksiyonu yazmanı istiyorum. @SKILL.md
 URL : ---
 
 Gerekli bütün selectorler ve ayrıntılar @company_details.html @main_table.html @pagination.html dosyalarında belirtildi. Bunlar dikkatlice incele ve buna göre fonksiyon yaz.

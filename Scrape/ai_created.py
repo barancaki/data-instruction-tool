@@ -1,8 +1,10 @@
 import pandas as pd
 import time
 import io
+import json
 import re
 import html
+import base64
 import requests
 import streamlit as st
 import plotly.express as px
@@ -3959,6 +3961,336 @@ def scrape_perpa_firmalar(page_count):
             label="Download CSV",
             data=csv_buffer.getvalue(),
             file_name=f"{st.session_state.get('function_name', 'perpa_firmalar')}.csv",
+            mime="text/csv"
+        )
+    else:
+        print(f"Total companies: {len(df)}")
+
+    return df
+
+
+def scrape_embedded_world(page_count):
+    base_domain = "https://www.embedded-world.de"
+    algolia_url = "https://4EB6G0V1NT-dsn.algolia.net/1/indexes/prod_website_companies_en/query"
+    tablo = []
+
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    algolia_headers = {
+        "X-Algolia-API-Key": "f0416e3d1b38ae3aa789c8750e12bfe5",
+        "X-Algolia-Application-Id": "4EB6G0V1NT",
+        "Content-Type": "application/json",
+    }
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        return re.sub(r"\s+", " ", html.unescape(text)).strip()
+
+    def unique_join(values):
+        seen = set()
+        output = []
+        for value in values:
+            cleaned = normalize_text(value)
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            output.append(cleaned)
+        return ", ".join(output)
+
+    def decode_mailto_value(value):
+        mail_value = normalize_text(value)
+        if not mail_value:
+            return ""
+        if "@" in mail_value:
+            return mail_value
+
+        try:
+            padded = mail_value + ("=" * (-len(mail_value) % 4))
+            decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
+            decoded = normalize_text(decoded)
+            if "@" in decoded:
+                return decoded
+        except Exception:
+            pass
+        return ""
+
+    def extract_detail_company_data(detail_html):
+        soup = BeautifulSoup(detail_html, "html.parser")
+        company_data = {}
+
+        next_data_script = soup.select_one("script#__NEXT_DATA__")
+        if next_data_script and next_data_script.string:
+            try:
+                next_data_json = json.loads(next_data_script.string)
+                company_data = (
+                    next_data_json.get("props", {})
+                    .get("pageProps", {})
+                    .get("companyData", {})
+                    or {}
+                )
+            except Exception:
+                company_data = {}
+
+        return soup, company_data
+
+    def extract_zip_city_from_line(line):
+        line_text = normalize_text(line)
+        if not line_text:
+            return "", ""
+
+        match = re.match(r"^([A-Za-z0-9\-]{3,12})\s+(.+)$", line_text)
+        if not match:
+            return "", ""
+
+        return normalize_text(match.group(1)), normalize_text(match.group(2))
+
+    seen_links = set()
+
+    try:
+        with requests.Session() as session:
+            session.headers.update(headers)
+
+            max_pages = max(1, int(page_count))
+
+            for page_idx in range(max_pages):
+                params = (
+                    f"query=&hitsPerPage=100&page={page_idx}"
+                    "&filters=site:embwld AND isExhibitor:Yes"
+                )
+
+                try:
+                    response = session.post(
+                        algolia_url,
+                        headers=algolia_headers,
+                        json={"params": params},
+                        timeout=45,
+                    )
+                    response.raise_for_status()
+                    search_data = response.json()
+                except Exception as e:
+                    print(f"Algolia page request failed ({page_idx + 1}): {e}")
+                    continue
+
+                if page_idx == 0:
+                    print(
+                        f"Embedded World total companies: {search_data.get('nbHits', 0)} "
+                        f"(Algolia pages: {search_data.get('nbPages', 0)})"
+                    )
+
+                hits = search_data.get("hits", []) or []
+                if not hits:
+                    print(f"No records on Algolia page {page_idx + 1}, stopping.")
+                    break
+
+                print(f"Processing Algolia page {page_idx + 1}: {len(hits)} companies")
+
+                for hit_index, hit in enumerate(hits, 1):
+                    detail_path = normalize_text(hit.get("url"))
+                    if not detail_path:
+                        continue
+
+                    detail_link = urljoin(base_domain, detail_path)
+                    if detail_link in seen_links:
+                        continue
+                    seen_links.add(detail_link)
+
+                    company_name = normalize_text(hit.get("companyName"))
+                    website = ""
+                    company_mail = normalize_text(hit.get("email"))
+                    company_mail2 = ""
+                    phone = ""
+                    address = normalize_text(hit.get("streetno"))
+                    zip_code = normalize_text(hit.get("postcode"))
+                    city = normalize_text(hit.get("city"))
+                    country = normalize_text(hit.get("country"))
+                    business_type = normalize_text(hit.get("companyType"))
+                    product_group = unique_join(hit.get("keyword", []) or [])
+
+                    if not product_group:
+                        product_group = unique_join(hit.get("products", []) or [])
+
+                    try:
+                        detail_response = session.get(detail_link, timeout=45)
+                        detail_response.raise_for_status()
+                        detail_soup, company_data = extract_detail_company_data(detail_response.text)
+
+                        company_name = (
+                            normalize_text(company_data.get("displayname_company"))
+                            or normalize_text(company_data.get("companyprofilename"))
+                            or company_name
+                        )
+
+                        website = normalize_text(company_data.get("url")) or website
+                        company_mail = normalize_text(company_data.get("email")) or company_mail
+                        phone = normalize_text(company_data.get("telephonenumber")) or phone
+                        address = normalize_text(company_data.get("streetno")) or address
+                        zip_code = normalize_text(company_data.get("postcode")) or zip_code
+                        city = normalize_text(company_data.get("city")) or city
+                        country = normalize_text(company_data.get("country")) or country
+                        business_type = normalize_text(company_data.get("companytype")) or business_type
+
+                        keyword_values = []
+                        for item in company_data.get("keywords", []) or []:
+                            if isinstance(item, dict):
+                                keyword_values.append(item.get("keyword", ""))
+                            else:
+                                keyword_values.append(item)
+                        if keyword_values:
+                            product_group = unique_join(keyword_values)
+
+                        if not product_group:
+                            def_values = []
+                            for nomenclature in company_data.get("nomenclatures", []) or []:
+                                if not isinstance(nomenclature, dict):
+                                    continue
+                                nomenclature_type = normalize_text(
+                                    nomenclature.get("nomenclaturetype")
+                                ).upper()
+                                if nomenclature_type == "DEF":
+                                    def_values.append(
+                                        nomenclature.get("nomenclaturedisplay")
+                                        or nomenclature.get("nomenclatures")
+                                    )
+                            product_group = unique_join(def_values)
+
+                        website_el = detail_soup.select_one(
+                            "[data-testid='company-details-contacts-website'][href]"
+                        )
+                        if website_el and not website:
+                            website = normalize_text(website_el.get("href", ""))
+
+                        phone_el = detail_soup.select_one(
+                            "[data-testid='company-details-contacts-phone'][href]"
+                        )
+                        if phone_el and not phone:
+                            phone_href = normalize_text(phone_el.get("href", ""))
+                            if phone_href.lower().startswith("tel:"):
+                                phone = normalize_text(phone_href.replace("tel:", "", 1))
+                            if not phone:
+                                phone = normalize_text(phone_el.get_text(" ", strip=True))
+
+                        email_el = detail_soup.select_one(
+                            "[data-testid='company-details-contacts-email'][href]"
+                        )
+                        if email_el and not company_mail:
+                            email_href = normalize_text(email_el.get("href", ""))
+                            if email_href.lower().startswith("mailto:"):
+                                raw_email = normalize_text(email_href.replace("mailto:", "", 1))
+                                company_mail = decode_mailto_value(raw_email)
+
+                        address_lines = [
+                            normalize_text(p.get_text(" ", strip=True))
+                            for p in detail_soup.select(
+                                "h4[data-testid='company-details-contacts-headline'] + div section p.text-copy-l"
+                            )
+                            if normalize_text(p.get_text(" ", strip=True))
+                        ]
+
+                        if address_lines:
+                            if not address:
+                                address = address_lines[0]
+                            if len(address_lines) >= 2:
+                                parsed_zip, parsed_city = extract_zip_city_from_line(address_lines[1])
+                                if not zip_code:
+                                    zip_code = parsed_zip
+                                if not city:
+                                    city = parsed_city
+                            if not country and len(address_lines) >= 3:
+                                country = address_lines[-1]
+
+                        if not product_group:
+                            we_offer_headline = detail_soup.select_one(
+                                "h4[data-testid='company-keywords-1-headline']"
+                            )
+                            if we_offer_headline and "offer" in normalize_text(
+                                we_offer_headline.get_text(" ", strip=True)
+                            ).lower():
+                                keyword_container = we_offer_headline.find_parent("div")
+                                if keyword_container:
+                                    keyword_spans = [
+                                        normalize_text(span.get_text(" ", strip=True))
+                                        for span in keyword_container.select("span.pure-tag")
+                                    ]
+                                    product_group = unique_join(keyword_spans)
+
+                    except Exception as e:
+                        print(f"Detail parse failed for {detail_link}: {e}")
+
+                    print(
+                        f"  {hit_index}/{len(hits)} -> {company_name or '[No Name]'} "
+                        f"(page {page_idx + 1})"
+                    )
+
+                    tablo.append({
+                        "Data Source/ExhibitionName": "Embedded World",
+                        "ExhibitionProductGroup": product_group,
+                        "CompanyName": company_name,
+                        "CompanyWebsite": website,
+                        "CompanyMail": company_mail,
+                        "CompanyMail2": company_mail2,
+                        "CompanyPhone": phone,
+                        "CompanyAddress": address,
+                        "CompanyZipCode": zip_code,
+                        "CompanyCity": city,
+                        "CompanyCountry": country,
+                        "CompanyBusinessType": business_type,
+                        "Detay Link": detail_link,
+                    })
+
+    except Exception as e:
+        print(f"Embedded World scraper error: {e}")
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns + ["Detay Link"]:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + ["Detay Link"]]
+
+    print(f"Total companies scraped: {len(df)}")
+
+    if st:
+        st.dataframe(df)
+
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="Download Excel (.xlsx)",
+            data=excel_buffer,
+            file_name=f"{st.session_state.get('function_name', 'embedded_world')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="Download CSV",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'embedded_world')}.csv",
             mime="text/csv"
         )
     else:
