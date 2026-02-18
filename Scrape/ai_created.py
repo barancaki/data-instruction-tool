@@ -2,6 +2,8 @@ import pandas as pd
 import time
 import io
 import re
+import html
+import requests
 import streamlit as st
 import plotly.express as px
 from selenium import webdriver
@@ -3387,3 +3389,287 @@ def scrape_chillventa(iterations):
         )
     else:
         st.warning("No data extracted.")
+
+
+def scrape_euroshop_2026(sayfa_sayisi):
+    search_url = "https://www.euroshop-tradefair.com/vis-api/vis/v3/en/search"
+    detail_url_template = "https://www.euroshop-tradefair.com/vis-api/vis/v1/en/exhibitors/{}/json"
+    public_profile_url = "https://www.euroshop-tradefair.com/vis/v1/en/exhprofiles/{}"
+    rows_per_page = 30
+    tablo = []
+
+    headers = {
+        "x-vis-domain": "https://www.euroshop-tradefair.com",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+    }
+    max_retry_wait = 60
+
+    def request_with_retry(session, url, request_label, params=None, timeout=45, max_retries=7, base_wait=2):
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = session.get(url, headers=headers, params=params, timeout=timeout)
+                status_code = response.status_code
+
+                if status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    wait_seconds = min(max_retry_wait, base_wait * (2 ** (attempt - 1)))
+                    if retry_after:
+                        try:
+                            wait_seconds = max(wait_seconds, int(float(retry_after)))
+                        except (TypeError, ValueError):
+                            pass
+                    print(
+                        f"{request_label} rate limited (429). "
+                        f"Retry {attempt}/{max_retries} after {wait_seconds}s"
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+
+                if 500 <= status_code < 600 and attempt < max_retries:
+                    wait_seconds = min(max_retry_wait, base_wait * (2 ** (attempt - 1)))
+                    print(
+                        f"{request_label} server error ({status_code}). "
+                        f"Retry {attempt}/{max_retries} after {wait_seconds}s"
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+
+                response.raise_for_status()
+                return response
+
+            except requests.RequestException as e:
+                if attempt >= max_retries:
+                    print(f"{request_label} failed after {max_retries} retries: {e}")
+                    return None
+                wait_seconds = min(max_retry_wait, base_wait * (2 ** (attempt - 1)))
+                print(
+                    f"{request_label} request error ({e}). "
+                    f"Retry {attempt}/{max_retries} after {wait_seconds}s"
+                )
+                time.sleep(wait_seconds)
+
+        return None
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        text = html.unescape(html.unescape(text))
+        text = re.sub(r"\s+", " ", text).strip()
+        text = text.replace("E-mail:", "").replace("Email:", "").replace("Phone:", "").strip()
+        return text
+
+    def unique_join(values):
+        seen = set()
+        cleaned = []
+        for val in values:
+            norm = normalize_text(val)
+            if not norm:
+                continue
+            key = norm.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(norm)
+        return ", ".join(cleaned)
+
+    try:
+        with requests.Session() as session:
+            for page_num in range(1, sayfa_sayisi + 1):
+                page_start = (page_num - 1) * rows_per_page
+                print(f"\nProcessing page {page_num} (_start={page_start})")
+
+                params = {
+                    "_query": "",
+                    "_start": page_start,
+                    "_rows": rows_per_page,
+                    "_sort": "score_desc",
+                    "f_type": "profile",
+                }
+
+                try:
+                    response = request_with_retry(
+                        session,
+                        search_url,
+                        request_label=f"Page {page_num}",
+                        params=params,
+                        timeout=45,
+                        max_retries=10,
+                        base_wait=3,
+                    )
+                    if response is None:
+                        print(f"Skipping page {page_num} after all retries.")
+                        continue
+                    search_data = response.json()
+                except Exception as e:
+                    print(f"Failed to fetch page {page_num}: {e}")
+                    continue
+
+                docs = search_data.get("docs", [])
+                if not docs:
+                    print(f"No results on page {page_num}.")
+                    break
+
+                print(f"Found {len(docs)} profiles")
+
+                for idx, doc in enumerate(docs, 1):
+                    exh_id = normalize_text(doc.get("exh"))
+                    if not exh_id:
+                        continue
+
+                    try:
+                        print(f"  {idx}/{len(docs)} Fetching detail: {exh_id}")
+
+                        detail_url = detail_url_template.format(exh_id)
+                        detail_response = request_with_retry(
+                            session,
+                            detail_url,
+                            request_label=f"Detail {exh_id}",
+                            timeout=45,
+                            max_retries=7,
+                            base_wait=2,
+                        )
+                        if detail_response is None:
+                            print(f"  Skipping profile after retries ({exh_id})")
+                            continue
+                        detail_data = detail_response.json().get("result", {})
+
+                        profile = detail_data.get("profile", {}) or {}
+                        profile_address = profile.get("profileAddress", {}) or {}
+                        links = profile.get("links", []) or []
+                        categories = detail_data.get("categories", []) or []
+                        business_data = profile.get("businessData", []) or []
+                        contacts = detail_data.get("contacts", []) or []
+
+                        company_name = normalize_text(profile.get("name")) or normalize_text(doc.get("exhName"))
+                        website = ""
+                        for link_item in links:
+                            website = normalize_text(link_item.get("link"))
+                            if website:
+                                break
+
+                        primary_email = normalize_text(profile.get("email"))
+                        profile_phone = normalize_text((profile.get("phone") or {}).get("phone", ""))
+
+                        contact_emails = []
+                        contact_phones = []
+                        for contact in contacts:
+                            for field in contact.get("fields", []) or []:
+                                field_id = normalize_text(field.get("id")).lower()
+                                field_label = normalize_text(field.get("label")).lower()
+                                values = [normalize_text(v) for v in (field.get("values") or [])]
+                                values = [v for v in values if v]
+                                if not values:
+                                    continue
+
+                                if field_id == "email" or "mail" in field_label:
+                                    for val in values:
+                                        if "@" in val and val.lower() not in [m.lower() for m in contact_emails]:
+                                            contact_emails.append(val)
+
+                                if field_id == "phone" or "phone" in field_label:
+                                    for val in values:
+                                        if val.lower() not in [p.lower() for p in contact_phones]:
+                                            contact_phones.append(val)
+
+                        email_candidates = []
+                        for mail in [primary_email] + contact_emails:
+                            if mail and mail.lower() not in [m.lower() for m in email_candidates]:
+                                email_candidates.append(mail)
+
+                        phone_candidates = []
+                        for phone in [profile_phone] + contact_phones:
+                            if phone and phone.lower() not in [p.lower() for p in phone_candidates]:
+                                phone_candidates.append(phone)
+
+                        address_lines = profile_address.get("address", [])
+                        if isinstance(address_lines, str):
+                            address_lines = [address_lines]
+
+                        product_groups = unique_join([cat.get("label", "") for cat in categories])
+                        business_types = []
+                        for entry in business_data:
+                            for value in entry.get("values", []) or []:
+                                if isinstance(value, dict):
+                                    business_types.append(value.get("label") or value.get("value") or "")
+                                else:
+                                    business_types.append(value)
+
+                        exh_seo_id = normalize_text(detail_data.get("exhSeoId")) or normalize_text(doc.get("exhSeoId"))
+                        detail_link = public_profile_url.format(exh_seo_id) if exh_seo_id else ""
+
+                        tablo.append({
+                            "Data Source/ExhibitionName": "EuroShop 2026",
+                            "ExhibitionProductGroup": product_groups,
+                            "CompanyName": company_name,
+                            "CompanyWebsite": website,
+                            "CompanyMail": email_candidates[0] if len(email_candidates) > 0 else "",
+                            "CompanyMail2": email_candidates[1] if len(email_candidates) > 1 else "",
+                            "CompanyPhone": phone_candidates[0] if len(phone_candidates) > 0 else "",
+                            "CompanyAddress": unique_join(address_lines),
+                            "CompanyZipCode": normalize_text(profile_address.get("zip", "")),
+                            "CompanyCity": normalize_text(profile_address.get("city", "")),
+                            "CompanyCountry": normalize_text(profile_address.get("country", "")) or normalize_text(profile_address.get("countryCode", "")),
+                            "CompanyBusinessType": unique_join(business_types),
+                            "Detay Link": detail_link,
+                        })
+
+                    except Exception as e:
+                        print(f"  Error while processing profile ({exh_id}): {e}")
+                        continue
+
+    except Exception as e:
+        print(f"EuroShop scraper error: {e}")
+
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns + ["Detay Link"]:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + ["Detay Link"]]
+
+    print(f"\nTotal companies scraped: {len(df)}")
+
+    if st:
+        st.dataframe(df)
+
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="Download Excel (.xlsx)",
+            data=excel_buffer,
+            file_name=f"{st.session_state.get('function_name', 'euroshop_2026')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="Download CSV",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'euroshop_2026')}.csv",
+            mime="text/csv"
+        )
+    else:
+        print("\nStats (non-Streamlit mode):")
+        print(f"Total companies: {len(df)}")
+
+    return df
