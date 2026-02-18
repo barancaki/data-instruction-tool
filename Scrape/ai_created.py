@@ -6,6 +6,8 @@ import html
 import requests
 import streamlit as st
 import plotly.express as px
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -3670,6 +3672,296 @@ def scrape_euroshop_2026(sayfa_sayisi):
         )
     else:
         print("\nStats (non-Streamlit mode):")
+        print(f"Total companies: {len(df)}")
+
+    return df
+
+
+def scrape_perpa_firmalar(page_count):
+    base_domain = "https://www.perpa.com"
+    list_url = f"{base_domain}/perpa-firmalar"
+    tablo = []
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
+
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        text = html.unescape(html.unescape(text))
+        return re.sub(r"\s+", " ", text).strip()
+
+    def unique_join(values):
+        seen = set()
+        cleaned = []
+        for value in values:
+            value = normalize_text(value)
+            if not value:
+                continue
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(value)
+        return ", ".join(cleaned)
+
+    def parse_zip_city_country(address):
+        zip_code = ""
+        city = ""
+        country = "Turkey"
+        match = re.search(r"\b(\d{5})\b", address or "")
+        if match:
+            zip_code = match.group(1)
+            tail = normalize_text((address or "")[match.end():])
+            parts = [p for p in re.split(r"[,\s/]+", tail) if p]
+            if parts:
+                city = parts[-1].title()
+        return zip_code, city, country
+
+    def parse_list_card(card):
+        company_anchor = card.select_one("a.lnk[href]")
+        if not company_anchor:
+            return None
+
+        detail_href = normalize_text(company_anchor.get("href", ""))
+        if not detail_href:
+            return None
+
+        company_name = normalize_text(company_anchor.get_text(" ", strip=True))
+        detail_link = urljoin(base_domain, detail_href)
+        business_type = ""
+        list_address = ""
+
+        for span in card.select("div.firm-txt span"):
+            span_text = normalize_text(span.get_text(" ", strip=True))
+            if not span_text:
+                continue
+
+            span_lower = span_text.lower()
+            if "guncellenme" in span_lower or "güncellenme" in span_lower:
+                continue
+            if "sektor" in span_lower or "sektör" in span_lower:
+                business_type = normalize_text(span_text.split(":", 1)[1] if ":" in span_text else span_text)
+                continue
+
+            if not list_address:
+                list_address = span_text
+
+        return {
+            "name": company_name,
+            "detail_link": detail_link,
+            "business_type": business_type,
+            "list_address": list_address,
+        }
+
+    try:
+        with requests.Session() as session:
+            session.headers.update(headers)
+
+            for page_num in range(1, page_count + 1):
+                page_url = list_url if page_num == 1 else f"{list_url}?Page={page_num}"
+                print(f"Processing page {page_num}: {page_url}")
+
+                try:
+                    list_response = session.get(page_url, timeout=30)
+                    list_response.raise_for_status()
+                except Exception as e:
+                    print(f"Failed to fetch list page {page_num}: {e}")
+                    continue
+
+                list_soup = BeautifulSoup(list_response.text, "html.parser")
+                cards = list_soup.select("div.page-firm-list ul li")
+                if not cards:
+                    print(f"No company cards on page {page_num}.")
+                    break
+
+                print(f"Found {len(cards)} companies on page {page_num}")
+
+                for index, card in enumerate(cards, 1):
+                    parsed_card = parse_list_card(card)
+                    if not parsed_card:
+                        continue
+
+                    company_name = parsed_card["name"]
+                    detail_link = parsed_card["detail_link"]
+                    business_type = parsed_card["business_type"]
+                    list_address = parsed_card["list_address"]
+
+                    print(f"  {index}/{len(cards)} -> {company_name}")
+
+                    website = ""
+                    email_values = []
+                    phone_values = []
+                    address = list_address
+                    product_group = ""
+
+                    try:
+                        detail_response = session.get(detail_link, timeout=30)
+                        detail_response.raise_for_status()
+                        detail_soup = BeautifulSoup(detail_response.text, "html.parser")
+
+                        address_el = detail_soup.select_one("div.cmpy-1-txt span")
+                        if address_el:
+                            address = normalize_text(address_el.get_text(" ", strip=True))
+
+                        for info_block in detail_soup.select("div.cmpy-1-phone"):
+                            label_el = info_block.select_one("span")
+                            label = normalize_text(label_el.get_text(" ", strip=True)).lower() if label_el else ""
+                            block_text = normalize_text(info_block.get_text(" ", strip=True))
+                            link_el = info_block.select_one("a[href]")
+                            href_value = normalize_text(link_el.get("href", "")) if link_el else ""
+
+                            if "web" in label:
+                                candidate_website = href_value or (
+                                    normalize_text(link_el.get_text(" ", strip=True)) if link_el else ""
+                                )
+                                if candidate_website:
+                                    website = candidate_website
+                                continue
+
+                            if "mail" in label:
+                                candidate_mail = ""
+                                if href_value.lower().startswith("mailto:"):
+                                    candidate_mail = normalize_text(href_value.replace("mailto:", "", 1))
+                                elif href_value:
+                                    candidate_mail = href_value
+                                elif link_el:
+                                    candidate_mail = normalize_text(link_el.get_text(" ", strip=True))
+
+                                if not candidate_mail:
+                                    mail_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", block_text)
+                                    candidate_mail = normalize_text(mail_match.group(0)) if mail_match else ""
+
+                                if candidate_mail and "@" in candidate_mail:
+                                    email_values.append(candidate_mail)
+                                continue
+
+                            if "tel" in label or "gsm" in label or "fax" in label:
+                                phone_value = ""
+                                span_values = info_block.select("span")
+                                if len(span_values) > 1:
+                                    phone_value = normalize_text(span_values[-1].get_text(" ", strip=True))
+                                if not phone_value and ":" in block_text:
+                                    phone_value = normalize_text(block_text.split(":", 1)[1])
+                                if phone_value:
+                                    phone_values.append(phone_value)
+
+                        if not website:
+                            website_el = detail_soup.select_one("div.cmpy-1-phone a[href^='http']")
+                            if website_el:
+                                website = normalize_text(website_el.get("href", ""))
+
+                        if not email_values:
+                            mail_el = detail_soup.select_one("a[href^='mailto:']")
+                            if mail_el:
+                                mail_href = normalize_text(mail_el.get("href", ""))
+                                if mail_href.lower().startswith("mailto:"):
+                                    email_values.append(normalize_text(mail_href.replace("mailto:", "", 1)))
+
+                        product_list = [
+                            normalize_text(li.get_text(" ", strip=True))
+                            for li in detail_soup.select("div.company-2-inner li")
+                        ]
+                        product_group = unique_join(product_list)
+
+                        if not product_group:
+                            product_wrapper = detail_soup.select_one("div.company-2-inner")
+                            if product_wrapper:
+                                product_group = normalize_text(product_wrapper.get_text(" ", strip=True))
+
+                    except Exception as e:
+                        print(f"Detail parse failed for {detail_link}: {e}")
+
+                    if website and not email_values:
+                        try:
+                            extra_mails = site_icerisinden_email_bul(website)
+                            if extra_mails:
+                                for extra_mail in extra_mails:
+                                    cleaned_mail = normalize_text(extra_mail)
+                                    if cleaned_mail and "@" in cleaned_mail:
+                                        email_values.append(cleaned_mail)
+                        except Exception:
+                            pass
+
+                    email_values = [mail for mail in email_values if "@" in mail]
+                    unique_emails = []
+                    for mail in email_values:
+                        if mail.lower() not in [m.lower() for m in unique_emails]:
+                            unique_emails.append(mail)
+
+                    phone_text = unique_join(phone_values)
+                    address = normalize_text(address)
+                    zip_code, city, country = parse_zip_city_country(address)
+
+                    tablo.append({
+                        "Data Source/ExhibitionName": "Perpa Firmalar",
+                        "ExhibitionProductGroup": product_group,
+                        "CompanyName": company_name,
+                        "CompanyWebsite": website,
+                        "CompanyMail": unique_emails[0] if len(unique_emails) > 0 else "",
+                        "CompanyMail2": unique_emails[1] if len(unique_emails) > 1 else "",
+                        "CompanyPhone": phone_text,
+                        "CompanyAddress": address,
+                        "CompanyZipCode": zip_code,
+                        "CompanyCity": city,
+                        "CompanyCountry": country,
+                        "CompanyBusinessType": business_type,
+                        "Detay Link": detail_link,
+                    })
+
+    except Exception as e:
+        print(f"Perpa scraper error: {e}")
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns + ["Detay Link"]:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + ["Detay Link"]]
+
+    print(f"Total companies scraped: {len(df)}")
+
+    if st:
+        st.dataframe(df)
+
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+        st.download_button(
+            label="Download Excel (.xlsx)",
+            data=excel_buffer,
+            file_name=f"{st.session_state.get('function_name', 'perpa_firmalar')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="Download CSV",
+            data=csv_buffer.getvalue(),
+            file_name=f"{st.session_state.get('function_name', 'perpa_firmalar')}.csv",
+            mime="text/csv"
+        )
+    else:
         print(f"Total companies: {len(df)}")
 
     return df
