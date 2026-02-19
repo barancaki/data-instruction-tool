@@ -2,7 +2,7 @@ from Scrape.tuyap_sablon1 import scrape_burtarim_fair,scrape_replast_all_pages,s
 from Scrape.deustche_messe_sablon import scrape_win_eurasia_all_pages,scrape_how_all_pages,scrape_sodex_all_pages,scrape_automechanika_all_pages
 from Scrape.tuyap_sablon2 import scrape_packaging_fair,scrape_plast_eurasia_all_pages,scrape_intermob_all_pages,scrape_woodtech_all_pages,scrape_texhibitionist_all_pages,scrape_bauma_all_exhibitors
 from Scrape.bagimsiz_sablonlar import scrape_evchargeshow,scrape_atechfuari,scrape_hvacr_world
-from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex, scrape_mostra_convegno, scrape_lopec, scrape_wam_morocco, scrape_chillventa, scrape_euroshop_2026, scrape_perpa_firmalar, scrape_embedded_world, scrape_global_industrie_exhibitors
+from Scrape.ai_created import scrape_advanced_engineering, scrape_mesago, scrape_gitex_africa_morocco, scrape_yasad_uyeler, scrape_logimat, scrape_acrex_india, scrape_aquatherm_tashkent, scrape_ifat_exhibitors, scrape_ahri_members, scrape_warsaw_hvac_expo, scrape_ptc_asia, scrape_mca_world_fair, scrape_logimotion, scrape_gitex, scrape_mostra_convegno, scrape_lopec, scrape_wam_morocco, scrape_chillventa, scrape_euroshop_2026, scrape_perpa_firmalar, scrape_embedded_world, scrape_global_industrie_exhibitors, scrape_electronica_2026_exhibitors, scrape_industryweek_exhibitors, scrape_ifema_matelec
 
 from Scrape.C_sablon import scrape_kalitefuari,scrape_mobisadimex
 from Scrape.scrape_innotrans import scrape_innotrans,save_to_sqlite,create_mysql_dump_from_sqlite
@@ -475,5 +475,63 @@ if "global-industrie.com/en/exhibitors-list" in url:
         st.success("Scan complete!")
         st.balloons()
 
-st.text('© Baran Çakı 2025')
+if "ifema.es/en/matelec/exhibitors/catalogue" in url:
+    st.info("Target: IFEMA MATELEC Exhibitors Catalogue")
+    page_count = st.number_input(
+        "How many pages do you want to process? (18 exhibitors per page)",
+        min_value=1,
+        value=3,
+        step=1,
+        key="ifema_matelec_page_count",
+    )
+    email_lookup_limit = st.number_input(
+        "How many missing-email companies should be enriched via web lookup? (0 = all missing)",
+        min_value=0,
+        value=30,
+        step=1,
+        key="ifema_matelec_email_lookup_limit",
+    )
 
+    if st.button("Start Scan", key="ifema_matelec_start_scan"):
+        with st.spinner("Scanning IFEMA MATELEC exhibitors..."):
+            st.session_state['function_name'] = 'ifema_matelec'
+            scrape_ifema_matelec(int(page_count), int(email_lookup_limit))
+        st.success("Scan complete!")
+        st.balloons()
+
+if "exhibitors.electronica.de/exhibitor-portal/2026/list-of-exhibitors" in url:
+    st.info("Target: electronica 2026 Exhibitor List")
+    page_count = st.number_input(
+        "How many pages do you want to scrape? (The portal currently shows around 97 pages)",
+        min_value=1,
+        value=3,
+        step=1,
+        key="electronica_2026_page_count",
+    )
+    email_lookup_limit = st.number_input(
+        "How many companies should be enriched with website/email lookup? (0 = all scraped rows)",
+        min_value=0,
+        value=30,
+        step=1,
+        key="electronica_2026_email_limit",
+    )
+
+    if st.button("Start Scan", key="electronica_2026_start_scan"):
+        with st.spinner("Scanning electronica 2026 exhibitors..."):
+            st.session_state['function_name'] = 'electronica_2026'
+            scrape_electronica_2026_exhibitors(int(page_count), int(email_lookup_limit))
+        st.success("Scan complete!")
+        st.balloons()
+
+
+if "industryweek.pl/en/exhibitors-catalog" in url:
+    st.info("Target: Warsaw Industry Week Exhibitors Catalog")
+
+    if st.button("Start Scan", key="industryweek_start_scan"):
+        with st.spinner("Scanning Industry Week exhibitors..."):
+            st.session_state['function_name'] = 'industryweek_exhibitors'
+            scrape_industryweek_exhibitors()
+        st.success("Scan complete!")
+        st.balloons()
+
+st.text('© Baran Çakı 2025')

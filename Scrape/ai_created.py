@@ -4586,3 +4586,804 @@ def scrape_global_industrie_exhibitors(load_more_count):
     )
 
     return df
+
+
+def scrape_industryweek_exhibitors():
+    base_url = "https://industryweek.pl/en/exhibitors-catalog/"
+    fallback_data_url = "https://industryweek.pl/wp-content/uploads/exhibitor-catalogs/pwe-exhibitors.json"
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def extract_items(value):
+        if value is None:
+            return []
+
+        if isinstance(value, dict):
+            collected = []
+            for nested in value.values():
+                collected.extend(extract_items(nested))
+            return collected
+
+        if isinstance(value, (list, tuple, set)):
+            collected = []
+            for nested in value:
+                collected.extend(extract_items(nested))
+            return collected
+
+        text = normalize_text(value)
+        if not text:
+            return []
+
+        pieces = [normalize_text(part) for part in re.split(r"[,\n;|]+", text)]
+        return [part for part in pieces if part]
+
+    def unique_join(values):
+        unique_values = []
+        seen = set()
+        for raw in values:
+            normalized = normalize_text(raw)
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_values.append(normalized)
+        return ", ".join(unique_values)
+
+    tablo = []
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+
+    try:
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            )
+        })
+
+        status_text.text("Loading exhibitor catalog page...")
+        page_response = session.get(base_url, timeout=45)
+        page_response.raise_for_status()
+
+        soup = BeautifulSoup(page_response.text, "html.parser")
+        data_url = fallback_data_url
+
+        config_script = soup.select_one("script#vue-catalog-js-before")
+        if config_script:
+            config_match = re.search(
+                r"window\.VUE_CATALOG_CONFIG\s*=\s*(\{.*?\});",
+                config_script.get_text(" ", strip=True),
+            )
+            if config_match:
+                try:
+                    config_data = json.loads(html.unescape(config_match.group(1)))
+                    configured_url = normalize_text(config_data.get("dataUrl"))
+                    if configured_url:
+                        data_url = configured_url
+                except json.JSONDecodeError:
+                    print("VUE_CATALOG_CONFIG could not be parsed. Falling back to default data URL.")
+
+        status_text.text("Downloading exhibitor dataset...")
+        data_response = session.get(data_url, timeout=90)
+        data_response.raise_for_status()
+        raw_payload = data_response.json()
+
+        if isinstance(raw_payload, list):
+            records = raw_payload
+        elif isinstance(raw_payload, dict):
+            records = [row for row in raw_payload.values() if isinstance(row, dict)]
+        else:
+            records = []
+
+        total_records = len(records)
+        st.info(f"Total {total_records} exhibitors found in Industry Week dataset.")
+
+        for idx, item in enumerate(records, start=1):
+            status_text.text(f"Processing exhibitor {idx}/{total_records}")
+            progress_bar.progress(idx / total_records if total_records else 1)
+
+            if not isinstance(item, dict):
+                continue
+
+            company_info = item.get("companyInfo") or {}
+            exhibitor = item.get("exhibitor") or {}
+            product_list = item.get("products") or []
+            if not isinstance(product_list, list):
+                product_list = []
+
+            product_group_values = []
+            product_group_values.extend(extract_items(company_info.get("industries")))
+            product_group_values.extend(extract_items(company_info.get("catalogTags")))
+            for product in product_list:
+                if isinstance(product, dict):
+                    product_group_values.extend(extract_items(product.get("name")))
+                    product_group_values.extend(extract_items(product.get("tags")))
+                    product_group_values.extend(extract_items(product.get("tabList")))
+                else:
+                    product_group_values.extend(extract_items(product))
+
+            company_name = normalize_text(company_info.get("displayName")) or normalize_text(
+                company_info.get("name")
+            )
+            company_website = normalize_text(company_info.get("website"))
+            company_mail = normalize_text(company_info.get("contactEmail"))
+            company_phone = normalize_text(company_info.get("contactPhone"))
+            company_address = normalize_text(exhibitor.get("address"))
+            company_zipcode = normalize_text(exhibitor.get("postalCode"))
+            company_city = normalize_text(exhibitor.get("city"))
+            company_country = normalize_text(exhibitor.get("country"))
+            company_business_type = unique_join(extract_items(company_info.get("types")))
+
+            tablo.append({
+                "Data Source/ExhibitionName": "Warsaw Industry Week",
+                "ExhibitionProductGroup": unique_join(product_group_values),
+                "CompanyName": company_name,
+                "CompanyWebsite": company_website,
+                "CompanyMail": company_mail,
+                "CompanyMail2": "",
+                "CompanyPhone": company_phone,
+                "CompanyAddress": company_address,
+                "CompanyZipCode": company_zipcode,
+                "CompanyCity": company_city,
+                "CompanyCountry": company_country,
+                "CompanyBusinessType": company_business_type,
+            })
+
+    except Exception as e:
+        print(f"Industry Week scraper error: {e}")
+        st.error(str(e))
+    finally:
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns]
+
+    st.dataframe(df)
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel (.xlsx)",
+        data=excel_buffer,
+        file_name=f"{st.session_state.get('function_name', 'industryweek_exhibitors')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="Download CSV",
+        data=csv_buffer.getvalue(),
+        file_name=f"{st.session_state.get('function_name', 'industryweek_exhibitors')}.csv",
+        mime="text/csv",
+    )
+
+    return df
+
+
+def scrape_electronica_2026_exhibitors(page_count, email_lookup_limit=30):
+    base_url = "https://exhibitors.electronica.de/exhibitor-portal/2026/list-of-exhibitors/"
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def extract_first_valid_email(email_values):
+        if not email_values:
+            return ""
+        for item in email_values:
+            candidate = normalize_text(item)
+            if "@" in candidate:
+                return candidate
+        return ""
+
+    def parse_location(topic_value):
+        raw_topic = normalize_text(topic_value)
+        zip_code = ""
+        city = ""
+        country = ""
+        address = raw_topic
+
+        if not raw_topic:
+            return address, zip_code, city, country
+
+        left_part = raw_topic
+        if "," in raw_topic:
+            left_part, right_part = raw_topic.rsplit(",", 1)
+            left_part = normalize_text(left_part)
+            country = normalize_text(right_part)
+
+        start_zip_pattern = re.compile(r"^\s*([A-Za-z]{0,2}\s*\d[\dA-Za-z\- ]{1,10})\s+(.+)$")
+        end_zip_pattern = re.compile(r"^\s*(.+?)\s+([A-Za-z]{0,2}\s*\d[\dA-Za-z\- ]{1,10})\s*$")
+
+        match_start = start_zip_pattern.match(left_part)
+        match_end = end_zip_pattern.match(left_part)
+
+        if match_start:
+            zip_code = normalize_text(match_start.group(1))
+            city = normalize_text(match_start.group(2))
+        elif match_end:
+            city = normalize_text(match_end.group(1))
+            zip_code = normalize_text(match_end.group(2))
+        else:
+            city = normalize_text(left_part)
+
+        return address, zip_code, city, country
+
+    def extract_page_rows(soup):
+        rows = []
+        for card in soup.select("div.pb_ce div.ct_le"):
+            company_name = ""
+            company_address = ""
+            company_zipcode = ""
+            company_city = ""
+            company_country = ""
+            company_business_type = ""
+
+            name_el = card.select_one("div.ce_head h2")
+            topic_el = card.select_one("div.ce_topic")
+            business_type_el = card.select_one("div.ce_exTy img[alt]")
+
+            if name_el:
+                company_name = normalize_text(name_el.get_text(" ", strip=True))
+            if topic_el:
+                parsed = parse_location(topic_el.get_text(" ", strip=True))
+                company_address, company_zipcode, company_city, company_country = parsed
+            if business_type_el:
+                company_business_type = normalize_text(business_type_el.get("alt", ""))
+
+            if not company_name:
+                continue
+
+            rows.append({
+                "Data Source/ExhibitionName": "electronica 2026",
+                "ExhibitionProductGroup": "",
+                "CompanyName": company_name,
+                "CompanyWebsite": "",
+                "CompanyMail": "",
+                "CompanyMail2": "",
+                "CompanyPhone": "",
+                "CompanyAddress": company_address,
+                "CompanyZipCode": company_zipcode,
+                "CompanyCity": company_city,
+                "CompanyCountry": company_country,
+                "CompanyBusinessType": company_business_type,
+            })
+
+        return rows
+
+    def get_total_pages(soup):
+        submit_el = soup.select_one("form#paging_1 input[name='SRField'][type='submit']")
+        if submit_el:
+            raw_value = normalize_text(submit_el.get("value", ""))
+            if raw_value.isdigit():
+                return int(raw_value)
+        return None
+
+    def build_next_payload(form):
+        if form is None:
+            return None
+
+        next_button = form.select_one("input[name='SRField_next']")
+        if not next_button or next_button.has_attr("disabled"):
+            return None
+
+        payload = {}
+        for input_el in form.select("input[name]"):
+            name = normalize_text(input_el.get("name", ""))
+            if not name:
+                continue
+
+            input_type = normalize_text(input_el.get("type", "")).lower()
+            if input_type == "image":
+                continue
+            if input_type == "submit" and name not in {"SRField_next"}:
+                continue
+
+            payload[name] = input_el.get("value", "")
+
+        payload["SRField_next"] = "next"
+        payload.pop("SRField", None)
+        return payload
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    max_pages = max(1, int(page_count))
+    max_email_lookup = max(0, int(email_lookup_limit))
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    tablo = []
+    website_cache = {}
+    email_cache = {}
+
+    try:
+        status_text.text("Opening electronica 2026 exhibitor list...")
+        response = session.get(base_url, timeout=45)
+        response.raise_for_status()
+        current_html = response.text
+        current_url = response.url
+
+        detected_total_pages = None
+        for page_no in range(1, max_pages + 1):
+            status_text.text(f"Parsing list page {page_no}/{max_pages}...")
+            progress_bar.progress(page_no / max_pages)
+
+            soup = BeautifulSoup(current_html, "html.parser")
+            if detected_total_pages is None:
+                detected_total_pages = get_total_pages(soup)
+                if detected_total_pages:
+                    st.info(f"Detected approximately {detected_total_pages} pages on the portal.")
+
+            page_rows = extract_page_rows(soup)
+            if not page_rows:
+                print(f"No exhibitors found on page {page_no}; stopping.")
+                break
+
+            tablo.extend(page_rows)
+
+            if page_no >= max_pages:
+                break
+
+            form = soup.select_one("form#paging_1") or soup.select_one("form[id^='paging_']")
+            payload = build_next_payload(form)
+            if not payload:
+                print("Pagination next payload not available; stopping.")
+                break
+
+            action_url = urljoin(current_url, form.get("action", "") if form else "")
+            next_response = session.post(action_url, data=payload, timeout=45)
+            next_response.raise_for_status()
+            current_html = next_response.text
+            current_url = next_response.url or action_url
+
+        if tablo:
+            target_count = len(tablo) if max_email_lookup == 0 else min(len(tablo), max_email_lookup)
+            for idx, row in enumerate(tablo[:target_count], start=1):
+                status_text.text(f"Enriching website/email {idx}/{target_count}...")
+                progress_bar.progress(idx / target_count if target_count else 1)
+
+                company_name = normalize_text(row.get("CompanyName", ""))
+                if not company_name:
+                    continue
+
+                website = website_cache.get(company_name, "")
+                if not website:
+                    try:
+                        website = normalize_text(google_ilk_link_al(company_name))
+                        if not website:
+                            website = normalize_text(bing_ilk_link_al(company_name))
+                    except Exception:
+                        website = ""
+                    website_cache[company_name] = website
+
+                if website:
+                    row["CompanyWebsite"] = website
+
+                if website:
+                    email = email_cache.get(website, "")
+                    if not email:
+                        try:
+                            email_values = site_icerisinden_email_bul(website)
+                            email = extract_first_valid_email(email_values)
+                        except Exception:
+                            email = ""
+                        email_cache[website] = email
+                    row["CompanyMail"] = email
+
+    except Exception as e:
+        print(f"electronica 2026 scraper error: {e}")
+        st.error(str(e))
+    finally:
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns]
+
+    st.dataframe(df)
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel (.xlsx)",
+        data=excel_buffer,
+        file_name=f"{st.session_state.get('function_name', 'electronica_2026')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="Download CSV",
+        data=csv_buffer.getvalue(),
+        file_name=f"{st.session_state.get('function_name', 'electronica_2026')}.csv",
+        mime="text/csv",
+    )
+
+    return df
+
+
+def scrape_ifema_matelec(page_count, email_lookup_limit=30):
+    catalogue_url = "https://www.ifema.es/en/matelec/exhibitors/catalogue?page=1"
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def normalize_url(value):
+        url_value = normalize_text(value)
+        if not url_value:
+            return ""
+        if url_value.startswith("//"):
+            return f"https:{url_value}"
+        if url_value.startswith(("http://", "https://")):
+            return url_value
+        return ""
+
+    def strip_html_text(value):
+        cleaned = normalize_text(value)
+        if not cleaned:
+            return ""
+        return normalize_text(BeautifulSoup(html.unescape(cleaned), "html.parser").get_text(" ", strip=True))
+
+    def unique_join(values):
+        unique_values = []
+        seen = set()
+        for raw in values:
+            text = normalize_text(raw)
+            if not text:
+                continue
+            key = text.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_values.append(text)
+        return ", ".join(unique_values)
+
+    def extract_first_valid_email(values):
+        if not values:
+            return ""
+
+        if isinstance(values, str):
+            source_values = [values]
+        else:
+            source_values = values
+
+        for raw in source_values:
+            candidate = normalize_text(raw)
+            if not candidate:
+                continue
+            emails = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", candidate)
+            for email_value in emails:
+                normalized_email = normalize_text(email_value)
+                if normalized_email:
+                    return normalized_email
+        return ""
+
+    def dynamic_field_values(field_obj):
+        values = []
+        if not isinstance(field_obj, dict):
+            return values
+
+        for item in field_obj.get("values") or []:
+            if isinstance(item, dict):
+                values.append(item.get("value"))
+            else:
+                values.append(item)
+
+        raw_value = field_obj.get("value")
+        if isinstance(raw_value, list):
+            values.extend(raw_value)
+        elif raw_value is not None:
+            values.append(raw_value)
+
+        normalized_values = []
+        for value in values:
+            if isinstance(value, dict):
+                normalized_values.append(normalize_text(value.get("value") or value.get("name")))
+            else:
+                normalized_values.append(normalize_text(value))
+
+        return [value for value in normalized_values if value]
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    max_pages = max(1, int(page_count))
+    max_email_lookup = max(0, int(email_lookup_limit))
+
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    tablo = []
+    website_cache = {}
+    email_cache = {}
+    email_lookup_attempts = 0
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    try:
+        status_text.text("Opening IFEMA MATELEC catalogue...")
+        landing_response = session.get(catalogue_url, timeout=45)
+        landing_response.raise_for_status()
+
+        landing_soup = BeautifulSoup(landing_response.text, "html.parser")
+        container = landing_soup.select_one("section.live-connect-exhibitors")
+        if container is None:
+            raise ValueError("Could not find live-connect-exhibitors section on catalogue page.")
+
+        api_base_url = normalize_text(container.get("data-base-url"))
+        if not api_base_url:
+            raise ValueError("API base URL is missing in page configuration.")
+
+        page_size_raw = normalize_text(container.get("data-page-size"))
+        page_size = int(page_size_raw) if page_size_raw.isdigit() else 18
+        max_records = max_pages * page_size
+
+        status_text.text("Downloading exhibitor list from API...")
+        search_payload = {
+            "page": 0,
+            "pageSize": 10000,
+            "search": "",
+            "dynamicFields": [],
+            "countryIds": [],
+        }
+        search_response = session.post(
+            f"{api_base_url}/exhibitors/search?language=en",
+            json=search_payload,
+            timeout=60,
+        )
+        search_response.raise_for_status()
+        search_data = search_response.json().get("data") or []
+
+        if not isinstance(search_data, list):
+            search_data = []
+
+        exhibitors = search_data[:max_records]
+        st.info(
+            f"API returned {len(search_data)} exhibitors. "
+            f"Processing first {len(exhibitors)} records ({max_pages} page(s) x {page_size})."
+        )
+
+        total = len(exhibitors)
+        for idx, list_item in enumerate(exhibitors, start=1):
+            status_text.text(f"Processing exhibitor {idx}/{total}")
+            progress_bar.progress(idx / total if total else 1)
+
+            if not isinstance(list_item, dict):
+                continue
+
+            exhibitor_id = normalize_text(list_item.get("id"))
+            detail_url = f"{api_base_url}/exhibitors/{exhibitor_id}?language=en" if exhibitor_id else ""
+
+            detail_data = {}
+            if detail_url:
+                try:
+                    detail_response = session.get(detail_url, timeout=45)
+                    detail_response.raise_for_status()
+                    parsed_detail = detail_response.json()
+                    if isinstance(parsed_detail, dict):
+                        detail_data = parsed_detail
+                except Exception as detail_error:
+                    print(f"IFEMA detail parse failed for {exhibitor_id}: {detail_error}")
+
+            company_name = normalize_text(detail_data.get("name")) or normalize_text(list_item.get("name"))
+            company_website = (
+                normalize_url(detail_data.get("link"))
+                or normalize_url(list_item.get("link"))
+            )
+            company_mail = extract_first_valid_email([
+                detail_data.get("email"),
+                list_item.get("email"),
+            ])
+            company_phone = ""
+            company_address = ""
+            company_zip_code = ""
+            company_city = ""
+            company_country = ""
+            product_group_values = []
+            business_type_values = []
+
+            location = detail_data.get("location")
+            if isinstance(location, dict):
+                company_address = normalize_text(location.get("address"))
+                company_zip_code = normalize_text(location.get("postalCode"))
+                company_city = normalize_text(location.get("city"))
+                company_country = normalize_text(location.get("countryCode"))
+
+            categories = detail_data.get("categories") or []
+            category_values = []
+            for category in categories:
+                if isinstance(category, dict):
+                    category_values.append(category.get("name") or category.get("value"))
+                else:
+                    category_values.append(category)
+
+            dynamic_fields = detail_data.get("dynamicFields") or []
+            for field in dynamic_fields:
+                if not isinstance(field, dict):
+                    continue
+
+                field_name = normalize_text(field.get("name"))
+                field_name_lower = field_name.casefold()
+                values = dynamic_field_values(field)
+                if not values:
+                    continue
+
+                if any(token in field_name_lower for token in ("sector", "producto", "product", "category")):
+                    product_group_values.extend(values)
+
+                if any(token in field_name_lower for token in ("actividad", "activity", "business", "company")):
+                    business_type_values.extend(values)
+
+                if any(token in field_name_lower for token in ("phone", "tel", "telephone")) and not company_phone:
+                    company_phone = unique_join(values)
+
+                if any(token in field_name_lower for token in ("mail", "email")) and not company_mail:
+                    company_mail = extract_first_valid_email(values)
+
+                if any(token in field_name_lower for token in ("web", "website", "site", "url")) and not company_website:
+                    for value in values:
+                        candidate_website = normalize_url(value)
+                        if candidate_website:
+                            company_website = candidate_website
+                            break
+
+            product_group = unique_join(product_group_values) or unique_join(category_values)
+            company_business_type = unique_join(business_type_values)
+
+            if (not company_mail) and (max_email_lookup == 0 or email_lookup_attempts < max_email_lookup):
+                email_lookup_attempts += 1
+
+                if not company_website and company_name:
+                    if company_name in website_cache:
+                        company_website = website_cache[company_name]
+                    else:
+                        website_guess = ""
+                        try:
+                            website_guess = normalize_url(google_ilk_link_al(company_name))
+                            if not website_guess:
+                                website_guess = normalize_url(bing_ilk_link_al(company_name))
+                        except Exception:
+                            website_guess = ""
+                        website_cache[company_name] = website_guess
+                        company_website = website_guess
+
+                if company_website:
+                    if company_website in email_cache:
+                        fallback_email = email_cache[company_website]
+                    else:
+                        fallback_email = ""
+                        try:
+                            email_values = site_icerisinden_email_bul(company_website)
+                            fallback_email = extract_first_valid_email(email_values)
+                        except Exception:
+                            fallback_email = ""
+                        email_cache[company_website] = fallback_email
+
+                    if fallback_email:
+                        company_mail = fallback_email
+
+            tablo.append({
+                "Data Source/ExhibitionName": "IFEMA MATELEC",
+                "ExhibitionProductGroup": product_group,
+                "CompanyName": company_name,
+                "CompanyWebsite": company_website,
+                "CompanyMail": company_mail,
+                "CompanyMail2": "",
+                "CompanyPhone": company_phone,
+                "CompanyAddress": company_address,
+                "CompanyZipCode": company_zip_code,
+                "CompanyCity": company_city,
+                "CompanyCountry": company_country,
+                "CompanyBusinessType": company_business_type,
+                "DetailUrl": detail_url,
+                "CompanyDescription": strip_html_text(detail_data.get("description")),
+            })
+
+    except Exception as e:
+        print(f"IFEMA MATELEC scraper error: {e}")
+        st.error(str(e))
+    finally:
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    for col in required_columns + ["DetailUrl", "CompanyDescription"]:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + ["DetailUrl", "CompanyDescription"]]
+
+    st.dataframe(df)
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel (.xlsx)",
+        data=excel_buffer,
+        file_name=f"{st.session_state.get('function_name', 'ifema_matelec')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="Download CSV",
+        data=csv_buffer.getvalue(),
+        file_name=f"{st.session_state.get('function_name', 'ifema_matelec')}.csv",
+        mime="text/csv",
+    )
+
+    return df
