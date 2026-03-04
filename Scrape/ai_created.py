@@ -9,7 +9,7 @@ import requests
 import streamlit as st
 import plotly.express as px
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -5383,6 +5383,860 @@ def scrape_ifema_matelec(page_count, email_lookup_limit=30):
         label="Download CSV",
         data=csv_buffer.getvalue(),
         file_name=f"{st.session_state.get('function_name', 'ifema_matelec')}.csv",
+        mime="text/csv",
+    )
+
+    return df
+
+
+def scrape_maintenance_dortmund_exhibitors(page_count):
+    base_url = "https://www.maintenance-dortmund.de/en/exhibitor/"
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def extract_stand_number(raw_text):
+        text = normalize_text(raw_text)
+        if not text:
+            return ""
+        match = re.search(r"stand\s*[:\-]?\s*([a-z0-9\-\/]+)", text, flags=re.IGNORECASE)
+        if match:
+            return normalize_text(match.group(1)).upper()
+        return ""
+
+    def parse_total_pages(soup):
+        pages = set()
+        for anchor in soup.select("a[href]"):
+            href = normalize_text(anchor.get("href"))
+            page_data = normalize_text(anchor.get("data-page"))
+            if page_data.isdigit():
+                pages.add(int(page_data))
+
+            match_path = re.search(r"/en/exhibitor/page/(\d+)/", href)
+            if match_path:
+                pages.add(int(match_path.group(1)))
+
+            match_query = re.search(r"[?&]_paged=(\d+)", href)
+            if match_query:
+                pages.add(int(match_query.group(1)))
+
+        for script in soup.select("script"):
+            script_text = script.string or script.get_text(" ", strip=True)
+            if not script_text:
+                continue
+            for match in re.finditer(r'"total_pages"\s*:\s*(\d+)', script_text):
+                try:
+                    pages.add(int(match.group(1)))
+                except Exception:
+                    continue
+
+        return max(pages) if pages else 1
+
+    def parse_product_groups_from_article(article):
+        groups = []
+        for cls in article.get("class", []):
+            if not cls.startswith("exhibitor-category-"):
+                continue
+            group_slug = re.sub(r"-\d+$", "", cls.replace("exhibitor-category-", ""))
+            group_name = normalize_text(group_slug.replace("-", " ").title())
+            if group_name and group_name not in groups:
+                groups.append(group_name)
+        return ", ".join(groups)
+
+    def parse_exhibitors_from_list_page(soup):
+        exhibitors = []
+        for article in soup.select("article[role='listitem']"):
+            name_el = article.select_one("h3.elementor-post__title a, h3 a")
+            if not name_el:
+                continue
+
+            company_name = normalize_text(name_el.get_text(" ", strip=True))
+            detail_url = urljoin(base_url, normalize_text(name_el.get("href")))
+            stand_number = extract_stand_number(
+                article.select_one("div.elementor-post__badge").get_text(" ", strip=True)
+                if article.select_one("div.elementor-post__badge")
+                else ""
+            )
+            description = normalize_text(
+                article.select_one("a.elementor-post__excerpt p").get_text(" ", strip=True)
+                if article.select_one("a.elementor-post__excerpt p")
+                else ""
+            )
+            product_groups = parse_product_groups_from_article(article)
+
+            exhibitors.append({
+                "name": company_name,
+                "detail_url": detail_url,
+                "stand_number": stand_number,
+                "description": description,
+                "product_groups": product_groups,
+            })
+        return exhibitors
+
+    def parse_website_from_detail(detail_soup):
+        blocked_domains = (
+            "maintenance-dortmund.de",
+            "easyfairs.com",
+            "easyfairsassets.com",
+            "linkedin.com",
+            "facebook.com",
+            "instagram.com",
+            "youtube.com",
+            "twitter.com",
+            "x.com",
+            "xing.com",
+            "tiktok.com",
+        )
+        for anchor in detail_soup.select("div.elementor-widget-post-info a[href]"):
+            href = normalize_text(anchor.get("href"))
+            if not href.startswith(("http://", "https://")):
+                continue
+            href_lower = href.lower()
+            if any(domain in href_lower for domain in blocked_domains):
+                continue
+            return href
+        return ""
+
+    def extract_first_valid_email(values):
+        if not values:
+            return ""
+
+        if isinstance(values, str):
+            source_values = [values]
+        else:
+            source_values = values
+
+        for raw in source_values:
+            candidate = normalize_text(raw)
+            if not candidate:
+                continue
+            emails = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", candidate)
+            for email_value in emails:
+                normalized_email = normalize_text(email_value)
+                if normalized_email:
+                    return normalized_email
+        return ""
+
+    def normalize_website_url(raw_url):
+        url_value = normalize_text(raw_url)
+        if not url_value:
+            return ""
+        if url_value.startswith("//"):
+            return f"https:{url_value}"
+        if url_value.startswith(("http://", "https://")):
+            return url_value
+        return f"https://{url_value}"
+
+    def extract_mailto_from_soup(soup):
+        for anchor in soup.select("a[href^='mailto:']"):
+            href = normalize_text(anchor.get("href"))
+            candidate = href.replace("mailto:", "").split("?")[0].strip()
+            if candidate and extract_first_valid_email(candidate):
+                return candidate
+        return ""
+
+    def fetch_html_with_requests(target_url):
+        try:
+            response = session.get(target_url, timeout=20, allow_redirects=True)
+            response.raise_for_status()
+            return response.text
+        except Exception:
+            return ""
+
+    def collect_contact_links(soup, page_url, max_links=6):
+        keywords = (
+            "contact",
+            "kontakt",
+            "about",
+            "imprint",
+            "impressum",
+            "privacy",
+            "datenschutz",
+            "company",
+            "about-us",
+        )
+        parsed_page = urlparse(page_url)
+        root_host = normalize_text(parsed_page.netloc).lower().replace("www.", "")
+        links = []
+
+        for anchor in soup.select("a[href]"):
+            href = normalize_text(anchor.get("href"))
+            if not href:
+                continue
+            if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+                continue
+
+            text_value = normalize_text(anchor.get_text(" ", strip=True)).lower()
+            href_value = href.lower()
+            if not any(token in text_value or token in href_value for token in keywords):
+                continue
+
+            full_url = urljoin(page_url, href)
+            parsed_full = urlparse(full_url)
+            if parsed_full.scheme not in {"http", "https"}:
+                continue
+
+            link_host = normalize_text(parsed_full.netloc).lower().replace("www.", "")
+            if root_host and link_host and root_host != link_host:
+                continue
+
+            if full_url not in links:
+                links.append(full_url)
+            if len(links) >= max_links:
+                break
+
+        return links
+
+    def find_email_via_requests(website_url):
+        normalized_url = normalize_website_url(website_url)
+        if not normalized_url:
+            return ""
+
+        main_html = fetch_html_with_requests(normalized_url)
+        if not main_html:
+            return ""
+
+        main_soup = BeautifulSoup(main_html, "html.parser")
+        main_mailto = extract_mailto_from_soup(main_soup)
+        if main_mailto:
+            return main_mailto
+
+        direct_email = extract_first_valid_email(extract_emails_from_source(main_html))
+        if direct_email:
+            return direct_email
+
+        for contact_url in collect_contact_links(main_soup, normalized_url):
+            contact_html = fetch_html_with_requests(contact_url)
+            if not contact_html:
+                continue
+
+            contact_soup = BeautifulSoup(contact_html, "html.parser")
+            contact_mailto = extract_mailto_from_soup(contact_soup)
+            if contact_mailto:
+                return contact_mailto
+
+            contact_email = extract_first_valid_email(extract_emails_from_source(contact_html))
+            if contact_email:
+                return contact_email
+
+        return ""
+
+    def parse_location_from_detail(detail_soup):
+        for ul in detail_soup.select("ul.elementor-icon-list-items"):
+            text_value = normalize_text(ul.get_text(" ", strip=True))
+            if not text_value:
+                continue
+            if "STAND" in text_value.upper():
+                continue
+            if ul.select_one("i.fa-map-marker-alt") is None:
+                continue
+
+            pieces = []
+            for li in ul.select("li.elementor-icon-list-item"):
+                piece = normalize_text(li.get_text(" ", strip=True)).strip(",")
+                if piece:
+                    pieces.append(piece)
+
+            if len(pieces) >= 3:
+                zip_code = normalize_text(pieces[0]).strip(",")
+                city = normalize_text(pieces[1]).strip(",")
+                country = normalize_text(pieces[2]).strip(",")
+                return "", zip_code, city, country
+
+        return "", "", "", ""
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    max_pages = max(1, int(page_count))
+    session = requests.Session()
+    session.headers.update(headers)
+
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    tablo = []
+    seen_detail_urls = set()
+    email_cache = {}
+
+    try:
+        status_text.text("Opening maintenance Dortmund exhibitor list...")
+        first_page_url = f"{base_url}?_paged=1"
+        first_response = session.get(first_page_url, timeout=45)
+        first_response.raise_for_status()
+        first_soup = BeautifulSoup(first_response.text, "html.parser")
+
+        detected_total_pages = parse_total_pages(first_soup)
+        pages_to_scan = max_pages
+        st.info(
+            f"Detected approximately {detected_total_pages} pages on the portal. "
+            f"Scanning requested {pages_to_scan} page(s) with '?_paged=' pagination."
+        )
+
+        for page_no in range(1, pages_to_scan + 1):
+            progress_bar.progress(page_no / pages_to_scan if pages_to_scan else 1)
+            status_text.text(f"Scanning list page {page_no}/{pages_to_scan}...")
+
+            page_url = f"{base_url}?_paged={page_no}"
+            page_response = first_response if page_no == 1 else session.get(page_url, timeout=45)
+            if page_no != 1:
+                page_response.raise_for_status()
+
+            page_soup = first_soup if page_no == 1 else BeautifulSoup(page_response.text, "html.parser")
+            exhibitors = parse_exhibitors_from_list_page(page_soup)
+            if not exhibitors:
+                print(f"No exhibitors found on page {page_no}; stopping.")
+                break
+
+            for idx, exhibitor in enumerate(exhibitors, start=1):
+                detail_url = normalize_text(exhibitor.get("detail_url"))
+                if not detail_url or detail_url in seen_detail_urls:
+                    continue
+                seen_detail_urls.add(detail_url)
+
+                status_text.text(
+                    f"Reading detail pages (page {page_no}/{pages_to_scan}, "
+                    f"company {idx}/{len(exhibitors)})..."
+                )
+
+                company_name = normalize_text(exhibitor.get("name"))
+                company_stand = normalize_text(exhibitor.get("stand_number"))
+                company_description = normalize_text(exhibitor.get("description"))
+                exhibition_product_group = normalize_text(exhibitor.get("product_groups"))
+
+                company_website = ""
+                company_mail = ""
+                company_zip_code = ""
+                company_city = ""
+                company_country = ""
+                company_address = ""
+
+                try:
+                    detail_response = session.get(detail_url, timeout=45)
+                    detail_response.raise_for_status()
+                    detail_soup = BeautifulSoup(detail_response.text, "html.parser")
+
+                    detail_h1 = detail_soup.select_one("h1.elementor-heading-title, h1")
+                    if detail_h1:
+                        company_name = normalize_text(detail_h1.get_text(" ", strip=True)) or company_name
+
+                    company_website = parse_website_from_detail(detail_soup)
+                    company_address, company_zip_code, company_city, company_country = parse_location_from_detail(detail_soup)
+
+                    if company_website:
+                        if company_website in email_cache:
+                            company_mail = email_cache[company_website]
+                        else:
+                            status_text.text(
+                                f"Searching email on website (page {page_no}/{pages_to_scan}, "
+                                f"company {idx}/{len(exhibitors)})..."
+                            )
+                            try:
+                                company_mail = find_email_via_requests(company_website)
+                            except Exception:
+                                company_mail = ""
+                            email_cache[company_website] = company_mail
+                except Exception as detail_error:
+                    print(f"Detail parsing failed for {detail_url}: {detail_error}")
+
+                tablo.append({
+                    "Data Source/ExhibitionName": "maintenance Dortmund",
+                    "ExhibitionProductGroup": exhibition_product_group,
+                    "CompanyName": company_name,
+                    "CompanyWebsite": company_website,
+                    "CompanyMail": company_mail,
+                    "CompanyMail2": "",
+                    "CompanyPhone": "",
+                    "CompanyAddress": company_address,
+                    "CompanyZipCode": company_zip_code,
+                    "CompanyCity": company_city,
+                    "CompanyCountry": company_country,
+                    "CompanyBusinessType": "",
+                    "StandNumber": company_stand,
+                    "DetailUrl": detail_url,
+                    "CompanyDescription": company_description,
+                })
+
+    except Exception as e:
+        print(f"maintenance Dortmund scraper error: {e}")
+        st.error(str(e))
+    finally:
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    extra_columns = ["StandNumber", "DetailUrl", "CompanyDescription"]
+    for col in required_columns + extra_columns:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + extra_columns]
+
+    st.dataframe(df)
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel (.xlsx)",
+        data=excel_buffer,
+        file_name=f"{st.session_state.get('function_name', 'maintenance_dortmund')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="Download CSV",
+        data=csv_buffer.getvalue(),
+        file_name=f"{st.session_state.get('function_name', 'maintenance_dortmund')}.csv",
+        mime="text/csv",
+    )
+
+    return df
+
+
+def scrape_intralogistik_dortmund_exhibitors(page_count):
+    base_url = "https://www.dortmund.intralogistik-messen.de/exhibitors/"
+    list_api_url = "https://my.easyfairs.com/widgets/api/stands/?language=en"
+    detail_api_template = "https://my.easyfairs.com/widgets/api/stands/detail/{stand_id}/?language=en"
+    required_columns = [
+        "Data Source/ExhibitionName",
+        "ExhibitionProductGroup",
+        "CompanyName",
+        "CompanyWebsite",
+        "CompanyMail",
+        "CompanyMail2",
+        "CompanyPhone",
+        "CompanyAddress",
+        "CompanyZipCode",
+        "CompanyCity",
+        "CompanyCountry",
+        "CompanyBusinessType",
+    ]
+
+    def normalize_text(value):
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def normalize_website_url(raw_url):
+        url_value = normalize_text(raw_url)
+        if not url_value:
+            return ""
+        if url_value.startswith("//"):
+            return f"https:{url_value}"
+        if url_value.startswith(("http://", "https://")):
+            return url_value
+        return f"https://{url_value}"
+
+    def slugify_text(value):
+        text_value = normalize_text(value).lower()
+        if not text_value:
+            return ""
+        text_value = text_value.replace("&", " and ")
+        text_value = re.sub(r"[^a-z0-9]+", "-", text_value)
+        return text_value.strip("-")
+
+    def get_localized_text(value, preferred_language="en"):
+        if isinstance(value, dict):
+            preferred = normalize_text(value.get(preferred_language))
+            if preferred:
+                return preferred
+            for nested_value in value.values():
+                candidate = normalize_text(nested_value)
+                if candidate:
+                    return candidate
+            return ""
+        if isinstance(value, list):
+            for item in value:
+                candidate = get_localized_text(item, preferred_language)
+                if candidate:
+                    return candidate
+            return ""
+        return normalize_text(value)
+
+    def extract_first_valid_email(values):
+        if not values:
+            return ""
+        source_values = [values] if isinstance(values, str) else values
+        for raw in source_values:
+            candidate = normalize_text(raw)
+            if not candidate:
+                continue
+            emails = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", candidate)
+            for email_value in emails:
+                normalized_email = normalize_text(email_value)
+                if normalized_email:
+                    return normalized_email
+        return ""
+
+    def extract_mailto_from_soup(soup):
+        for anchor in soup.select("a[href^='mailto:']"):
+            href = normalize_text(anchor.get("href"))
+            candidate = href.replace("mailto:", "").split("?")[0].strip()
+            if candidate and extract_first_valid_email(candidate):
+                return candidate
+        return ""
+
+    def fetch_html_with_requests(target_url):
+        try:
+            response = session.get(target_url, timeout=20, allow_redirects=True)
+            response.raise_for_status()
+            return response.text
+        except Exception:
+            return ""
+
+    def collect_contact_links(soup, page_url, max_links=6):
+        keywords = (
+            "contact",
+            "kontakt",
+            "about",
+            "imprint",
+            "impressum",
+            "privacy",
+            "datenschutz",
+            "company",
+            "about-us",
+        )
+        parsed_page = urlparse(page_url)
+        root_host = normalize_text(parsed_page.netloc).lower().replace("www.", "")
+        links = []
+
+        for anchor in soup.select("a[href]"):
+            href = normalize_text(anchor.get("href"))
+            if not href:
+                continue
+            if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+                continue
+
+            text_value = normalize_text(anchor.get_text(" ", strip=True)).lower()
+            href_value = href.lower()
+            if not any(token in text_value or token in href_value for token in keywords):
+                continue
+
+            full_url = urljoin(page_url, href)
+            parsed_full = urlparse(full_url)
+            if parsed_full.scheme not in {"http", "https"}:
+                continue
+
+            link_host = normalize_text(parsed_full.netloc).lower().replace("www.", "")
+            if root_host and link_host and root_host != link_host:
+                continue
+
+            if full_url not in links:
+                links.append(full_url)
+            if len(links) >= max_links:
+                break
+
+        return links
+
+    def find_email_via_requests(website_url):
+        normalized_url = normalize_website_url(website_url)
+        if not normalized_url:
+            return ""
+
+        main_html = fetch_html_with_requests(normalized_url)
+        if not main_html:
+            return ""
+
+        main_soup = BeautifulSoup(main_html, "html.parser")
+        main_mailto = extract_mailto_from_soup(main_soup)
+        if main_mailto:
+            return main_mailto
+
+        direct_email = extract_first_valid_email(extract_emails_from_source(main_html))
+        if direct_email:
+            return direct_email
+
+        for contact_url in collect_contact_links(main_soup, normalized_url):
+            contact_html = fetch_html_with_requests(contact_url)
+            if not contact_html:
+                continue
+
+            contact_soup = BeautifulSoup(contact_html, "html.parser")
+            contact_mailto = extract_mailto_from_soup(contact_soup)
+            if contact_mailto:
+                return contact_mailto
+
+            contact_email = extract_first_valid_email(extract_emails_from_source(contact_html))
+            if contact_email:
+                return contact_email
+
+        return ""
+
+    def parse_categories(category_list):
+        if not isinstance(category_list, list):
+            return ""
+        values = []
+        for category in category_list:
+            if isinstance(category, dict):
+                category_name = get_localized_text(category.get("name"))
+            else:
+                category_name = normalize_text(category)
+            if category_name and category_name not in values:
+                values.append(category_name)
+        return ", ".join(values)
+
+    def parse_widget_state(detail_soup):
+        script_tag = detail_soup.select_one("script#widget-state")
+        if not script_tag:
+            return {}
+
+        script_text = script_tag.get_text("\n", strip=False)
+        match = re.search(
+            r"window\.__WIDGET_STATE__\s*=\s*(\{.*\})\s*;?\s*$",
+            script_text,
+            flags=re.DOTALL,
+        )
+        if not match:
+            return {}
+
+        raw_json = html.unescape(match.group(1))
+        try:
+            return json.loads(raw_json)
+        except Exception:
+            return {}
+
+    def build_public_detail_url(company_name, stand_id):
+        stand_slug = slugify_text(company_name)
+        stand_id_text = normalize_text(stand_id)
+        if stand_slug and stand_id_text:
+            return f"https://www.dortmund.intralogistik-messen.de/en/exhibitors/{stand_slug}-{stand_id_text}/"
+        return ""
+
+    common_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    api_headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.dortmund.intralogistik-messen.de",
+        "Referer": base_url,
+    }
+    html_headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Origin": "https://www.dortmund.intralogistik-messen.de",
+        "Referer": base_url,
+    }
+
+    max_pages = max(1, int(page_count))
+    session = requests.Session()
+    session.headers.update(common_headers)
+
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    tablo = []
+    seen_stand_ids = set()
+    email_cache = {}
+    detected_total_pages = None
+
+    try:
+        st.info(
+            f"Scanning requested {max_pages} page(s) with '?stands%5Bpage%5D=' pagination."
+        )
+
+        for page_no in range(1, max_pages + 1):
+            progress_bar.progress(page_no / max_pages if max_pages else 1)
+            status_text.text(f"Scanning list page {page_no}/{max_pages}...")
+
+            list_page_url = f"{base_url}?stands%5Bpage%5D={page_no}"
+            payload = [
+                {
+                    "indexName": "stands",
+                    "params": {
+                        "query": "",
+                        "page": page_no - 1,
+                        "hitsPerPage": 24,
+                        "filters": "(containerId: 2591)",
+                    },
+                }
+            ]
+
+            list_response = session.post(
+                list_api_url,
+                json=payload,
+                headers=api_headers,
+                timeout=45,
+            )
+            list_response.raise_for_status()
+            list_json = list_response.json() if list_response.text else {}
+
+            results = list_json.get("results", []) if isinstance(list_json, dict) else []
+            first_result = results[0] if results else {}
+            hits = first_result.get("hits", []) if isinstance(first_result, dict) else []
+
+            if page_no == 1 and isinstance(first_result, dict):
+                raw_nb_pages = first_result.get("nbPages")
+                try:
+                    detected_total_pages = int(raw_nb_pages)
+                except Exception:
+                    detected_total_pages = None
+                if detected_total_pages:
+                    st.info(
+                        f"Detected approximately {detected_total_pages} pages on the portal. "
+                        f"Scanning requested {max_pages} page(s)."
+                    )
+
+            if not hits:
+                print(f"No exhibitors found on page {page_no}; stopping.")
+                break
+
+            for idx, hit in enumerate(hits, start=1):
+                stand_id = normalize_text(hit.get("objectID"))
+                if not stand_id or stand_id in seen_stand_ids:
+                    continue
+                seen_stand_ids.add(stand_id)
+
+                status_text.text(
+                    f"Reading detail pages (page {page_no}/{max_pages}, "
+                    f"company {idx}/{len(hits)})..."
+                )
+
+                company_name = normalize_text(hit.get("name"))
+                company_stand = normalize_text(hit.get("standNumber"))
+                company_description = normalize_text(hit.get("description"))
+                exhibition_product_group = parse_categories(hit.get("categories"))
+
+                company_website = ""
+                company_mail = ""
+                company_phone = ""
+                company_address = ""
+                company_zip_code = ""
+                company_city = ""
+                company_country = ""
+                detail_url = build_public_detail_url(company_name, stand_id)
+
+                try:
+                    detail_response = session.get(
+                        detail_api_template.format(stand_id=stand_id),
+                        headers=html_headers,
+                        timeout=45,
+                    )
+                    detail_response.raise_for_status()
+
+                    detail_soup = BeautifulSoup(detail_response.text, "html.parser")
+                    widget_state = parse_widget_state(detail_soup)
+                    stand_data = widget_state.get("stand", {}) if isinstance(widget_state, dict) else {}
+
+                    if isinstance(stand_data, dict) and stand_data:
+                        company_name = normalize_text(stand_data.get("name")) or company_name
+                        company_stand = normalize_text(stand_data.get("standNumber")) or company_stand
+                        company_description = (
+                            get_localized_text(stand_data.get("description")) or company_description
+                        )
+
+                        detail_categories = parse_categories(stand_data.get("categories"))
+                        if detail_categories:
+                            exhibition_product_group = detail_categories
+
+                        company_website = normalize_website_url(stand_data.get("websiteUrl"))
+                        company_phone = normalize_text(stand_data.get("phone"))
+                        company_mail = normalize_text(stand_data.get("email"))
+                        company_zip_code = normalize_text(stand_data.get("zipCode"))
+                        company_city = normalize_text(stand_data.get("town"))
+                        company_country = normalize_text(stand_data.get("country"))
+                        company_address = normalize_text(stand_data.get("address"))
+
+                        detail_url = build_public_detail_url(company_name, stand_id) or detail_url
+
+                    if not company_website:
+                        website_anchor = detail_soup.select_one(
+                            ".stand-details__info-line-content a[href^='http']"
+                        )
+                        if website_anchor:
+                            company_website = normalize_website_url(website_anchor.get("href"))
+
+                    if company_website and not company_mail:
+                        if company_website in email_cache:
+                            company_mail = email_cache[company_website]
+                        else:
+                            status_text.text(
+                                f"Searching email on website (page {page_no}/{max_pages}, "
+                                f"company {idx}/{len(hits)})..."
+                            )
+                            try:
+                                company_mail = find_email_via_requests(company_website)
+                            except Exception:
+                                company_mail = ""
+                            email_cache[company_website] = company_mail
+
+                except Exception as detail_error:
+                    print(f"Detail parsing failed for stand {stand_id}: {detail_error}")
+
+                tablo.append({
+                    "Data Source/ExhibitionName": "Intralogistik Dortmund",
+                    "ExhibitionProductGroup": exhibition_product_group,
+                    "CompanyName": company_name,
+                    "CompanyWebsite": company_website,
+                    "CompanyMail": company_mail,
+                    "CompanyMail2": "",
+                    "CompanyPhone": company_phone,
+                    "CompanyAddress": company_address,
+                    "CompanyZipCode": company_zip_code,
+                    "CompanyCity": company_city,
+                    "CompanyCountry": company_country,
+                    "CompanyBusinessType": "",
+                    "StandNumber": company_stand,
+                    "DetailUrl": detail_url,
+                    "CompanyDescription": company_description,
+                    "ListPageUrl": list_page_url,
+                })
+
+    except Exception as e:
+        print(f"Intralogistik Dortmund scraper error: {e}")
+        st.error(str(e))
+    finally:
+        status_text.empty()
+        progress_bar.empty()
+
+    df = pd.DataFrame(tablo)
+    extra_columns = ["StandNumber", "DetailUrl", "CompanyDescription", "ListPageUrl"]
+    for col in required_columns + extra_columns:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[required_columns + extra_columns]
+
+    st.dataframe(df)
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel (.xlsx)",
+        data=excel_buffer,
+        file_name=f"{st.session_state.get('function_name', 'intralogistik_dortmund')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="Download CSV",
+        data=csv_buffer.getvalue(),
+        file_name=f"{st.session_state.get('function_name', 'intralogistik_dortmund')}.csv",
         mime="text/csv",
     )
 

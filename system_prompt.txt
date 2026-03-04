@@ -1,7 +1,7 @@
 @scraper_template.py ve @ui_template.py dosyalarını tamamen incele. Senden yeni bir fuar fonksiyonu yazmanı istiyorum. @SKILL.md
 URL : ---
 
-Gerekli bütün selectorler ve ayrıntılar @company_details.html @main_table.html @pagination.html dosyalarında belirtildi. Bunlar dikkatlice incele ve buna göre fonksiyon yaz.
+Gerekli bütün selectorler ve ayrıntılar: ---- belirtildi. Bunlar dikkatlice incele ve buna göre fonksiyon yaz.
 NOT: Site yapısı request ve BeatifulSoup ile çekmeye uygunsa requests ve BeatifulSoup kullanarak fonksiyonu yazmanı istiyorum. Eğer site yapısı buna uygun değilse Selenium kullanarak fonksiyonu yazabilirsin. Ancak mümkünse requests ve BeatifulSoup kullanmanı tercih ederim.
 
 Must have sütunlarını kesinlikle tabloda yer ver. Dolu olması önemli değil fakat bu sütunların hepsi kesinlike tabloda olmalı :
