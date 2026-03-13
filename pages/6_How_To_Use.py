@@ -15,7 +15,7 @@ This tool was developed to collect company and participant information from webs
 
 ### ➤ Steps:
 
-1. Go to the **“Exhibition Scraper”** page from the left menu.
+1. Go to the **“AI Web Scraper”** page from the left menu.
 2. Paste the following example URL into the box:
 
 https://replasteurasia.com/katilimci-listesi
@@ -51,7 +51,7 @@ With AI support, you can extract the information you want from the trade show we
 •    Working Principle: The page content is divided into parts and analyzed. Filtered information is returned based on the prompt.
 
 ➤ Steps:
-1.    Go to the “AI Analysis” page from the left menu.
+1.    Go to the “Website Analysis with AI” page from the left menu.
 
 2.    Enter the full URL of the trade fair website you want to analyze.
 

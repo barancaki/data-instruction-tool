@@ -333,7 +333,7 @@ class OptimizedDataMatcher:
 
 # Streamlit Arayüzü
 def main():
-    st.header("📁 Optimized Multi-Excel File Comparator (Column-Based)")
+    st.header("OptiExcel & Deduplication")
     
     # Yan panel - Ayarlar
     with st.sidebar:

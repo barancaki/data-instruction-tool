@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Streamlit Application for Company Product Group Classification Automation
+Streamlit Application for Auto- Segmentation Engine
 This application provides a user-friendly GUI for classifying companies based on their website content
 using semantic similarity with predefined product categories.
 """
@@ -35,7 +35,7 @@ warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
-    page_title="Company Classification Automation",
+    page_title="Auto- Segmentation Engine",
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -499,7 +499,7 @@ def main():
     Main Streamlit application function.
     """
     # Main header
-    st.markdown('<h1 class="main-header">🏢 Company Product Group Classification Automation</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">Auto- Segmentation Engine</h1>', unsafe_allow_html=True)
     
     # Sidebar for file uploads
     st.sidebar.markdown('<div class="sidebar-header">📁 File Upload</div>', unsafe_allow_html=True)

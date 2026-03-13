@@ -10,7 +10,7 @@ from Scrape.a_sablon import scrape_enosad_proses_all_members,scrape_enosad_fabri
 import streamlit as st
 from auth_helper import check_authentication,get_user_info,show_user_info_sidebar
 
-st.set_page_config(page_title="Fair Scraper", layout="centered")
+st.set_page_config(page_title="AI Web Scraper", layout="centered")
 # Authentication kontrolü
 check_authentication()
 
@@ -19,11 +19,11 @@ user_info = get_user_info()
 
 # Sidebar'da kullanıcı bilgilerini göster
 show_user_info_sidebar()
-st.sidebar.header("Welcome to the Fair Scraper tool!")
+st.sidebar.header("Welcome to the AI Web Scraper tool!")
 
 st.sidebar.text('© Baran Çakı 2025')
 
-st.header("_Fair_ scrape :blue[tool] ✅")
+st.header("AI Web Scraper")
 
 url = st.text_input("Enter the URL you want to scan:")
 

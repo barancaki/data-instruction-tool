@@ -49,7 +49,7 @@ show_user_info_sidebar()
 # -------------------------
 # Sidebar Bilgi
 # -------------------------
-st.sidebar.header("Welcome to the AI Scraper tool!")
+st.sidebar.header("Welcome to the Website Analysis with AI tool!")
 st.sidebar.markdown(
     '''## 🤖 Website Analysis with AI
 
